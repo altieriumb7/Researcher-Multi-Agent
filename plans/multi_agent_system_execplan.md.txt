@@ -120,3 +120,25 @@ Use OpenAI models and a modular architecture so prompts, schemas, tools, and orc
 ## Open questions
 - Whether to use Responses API only or Agents SDK + Responses API.
 - Whether tool access is global or per-agent.
+## Progress update
+
+### Completed
+- ✅ Milestone 1 (Skeleton)
+  - Project structure created under `src/researcher_multi_agent/` with `agents/`, `orchestrator/`, `schemas/`, `utils/`, and package entrypoints.
+  - Config and environment-driven model settings added.
+  - Base agent abstraction added (`BaseAgent`, `DeterministicAgent`).
+  - Shared state schema implemented (`GoalProfile`, canonical `SharedState`).
+  - Prompt loader implemented; prompts remain externalized in files.
+
+- ✅ Milestone 2 (Core agents)
+  - Implemented `ChiefOfStaff`, `TopicStrategist`, and `SkepticalReviewer`.
+  - Manager-led routing implemented with priority ordering.
+  - JSON-style schema validation implemented with explicit field/literal checks and typed output objects.
+  - End-to-end orchestration path implemented for first three agents (Chief → TopicStrategist → SkepticalReviewer).
+  - Tests added for schema validation, routing order, orchestration path, and unhandled delegation logging.
+
+### Still missing (outside Milestones 1-2)
+- ⏳ Milestone 3: `LiteratureCartographer`, `ProjectArchitect`, and related schemas/state updates.
+- ⏳ Milestone 4: `SupervisorMapper`, `NarrativeWriter`, and output formats.
+- ⏳ Milestone 5: full review gates, richer state transitions, tracing hooks.
+- ⏳ Milestone 6: broader validation suite (state transitions, revision loops, additional smoke/integration coverage).
