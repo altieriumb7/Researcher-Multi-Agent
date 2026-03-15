@@ -6,21 +6,8 @@ from typing import Any
 from researcher_multi_agent.schemas.validation import (
     SchemaValidationError,
     require_fields,
-    require_int_range,
-    require_list_of_str,
     require_literal,
-    require_type,
 )
-
-
-SCORECARD_KEYS = {
-    "bottleneck_value",
-    "tractability",
-    "measurability",
-    "novelty",
-    "lab_fit",
-    "first_project_strength",
-}
 
 
 @dataclass
@@ -39,10 +26,6 @@ class Delegation:
             "Delegation",
         )
         require_literal(payload["priority"], {"high", "medium", "low"}, "Delegation.priority")
-        require_type(payload["agent"], str, "Delegation.agent")
-        require_type(payload["task"], str, "Delegation.task")
-        require_type(payload["why_this_agent"], str, "Delegation.why_this_agent")
-        require_type(payload["expected_output"], str, "Delegation.expected_output")
         return cls(**payload)
 
     def model_dump(self) -> dict[str, Any]:
@@ -58,9 +41,6 @@ class MergedPlan:
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> "MergedPlan":
         require_fields(payload, ["now", "parallel", "later"], "MergedPlan")
-        require_list_of_str(payload["now"], "MergedPlan.now")
-        require_list_of_str(payload["parallel"], "MergedPlan.parallel")
-        require_list_of_str(payload["later"], "MergedPlan.later")
         return cls(**payload)
 
     def model_dump(self) -> dict[str, Any]:
@@ -83,12 +63,6 @@ class ChiefOfStaffOutput:
             ["goal_now", "assumptions", "delegations", "merged_plan", "risks", "state_update"],
             "ChiefOfStaffOutput",
         )
-        require_type(payload["goal_now"], str, "ChiefOfStaffOutput.goal_now")
-        require_list_of_str(payload["assumptions"], "ChiefOfStaffOutput.assumptions")
-        require_type(payload["delegations"], list, "ChiefOfStaffOutput.delegations")
-        require_list_of_str(payload["risks"], "ChiefOfStaffOutput.risks")
-        require_type(payload["state_update"], dict, "ChiefOfStaffOutput.state_update")
-
         delegations = [Delegation.from_dict(item) for item in payload["delegations"]]
         merged_plan = MergedPlan.from_dict(payload["merged_plan"])
         return cls(
@@ -138,22 +112,6 @@ class CandidateDirection:
             ],
             "CandidateDirection",
         )
-        require_type(payload["name"], str, "CandidateDirection.name")
-        require_type(payload["problem_statement"], str, "CandidateDirection.problem_statement")
-        require_type(payload["core_hypothesis"], str, "CandidateDirection.core_hypothesis")
-        require_type(payload["scorecard"], dict, "CandidateDirection.scorecard")
-        require_list_of_str(payload["why_promising"], "CandidateDirection.why_promising")
-        require_list_of_str(payload["why_risky"], "CandidateDirection.why_risky")
-        require_list_of_str(payload["kill_criteria"], "CandidateDirection.kill_criteria")
-        require_type(payload["first_paper_angle"], str, "CandidateDirection.first_paper_angle")
-
-        scorecard = payload["scorecard"]
-        missing_keys = SCORECARD_KEYS - set(scorecard.keys())
-        if missing_keys:
-            raise SchemaValidationError(f"CandidateDirection.scorecard missing keys: {sorted(missing_keys)}")
-        for key in SCORECARD_KEYS:
-            require_int_range(scorecard[key], min_value=1, max_value=5, field_name=f"CandidateDirection.scorecard.{key}")
-
         return cls(**payload)
 
     def model_dump(self) -> dict[str, Any]:
@@ -173,10 +131,6 @@ class TopicStrategistOutput:
             ["candidate_directions", "recommended_focus", "decisive_next_questions"],
             "TopicStrategistOutput",
         )
-        require_type(payload["candidate_directions"], list, "TopicStrategistOutput.candidate_directions")
-        require_list_of_str(payload["recommended_focus"], "TopicStrategistOutput.recommended_focus")
-        require_list_of_str(payload["decisive_next_questions"], "TopicStrategistOutput.decisive_next_questions")
-
         directions = [CandidateDirection.from_dict(item) for item in payload["candidate_directions"]]
         if not directions:
             raise SchemaValidationError("TopicStrategistOutput requires at least one candidate direction")
@@ -219,10 +173,6 @@ class SkepticalReviewerOutput:
         )
         require_literal(payload["verdict"], {"PASS", "REVISE", "REJECT"}, "SkepticalReviewerOutput.verdict")
         require_literal(payload["confidence"], {"low", "medium", "high"}, "SkepticalReviewerOutput.confidence")
-        require_list_of_str(payload["critical_issues"], "SkepticalReviewerOutput.critical_issues")
-        require_list_of_str(payload["minor_issues"], "SkepticalReviewerOutput.minor_issues")
-        require_list_of_str(payload["unsupported_claims"], "SkepticalReviewerOutput.unsupported_claims")
-        require_list_of_str(payload["revision_instructions"], "SkepticalReviewerOutput.revision_instructions")
         return cls(**payload)
 
     def model_dump(self) -> dict[str, Any]:

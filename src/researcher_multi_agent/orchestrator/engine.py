@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Callable
 
 from researcher_multi_agent.agents.chief_of_staff import ChiefOfStaff
 from researcher_multi_agent.agents.skeptical_reviewer import SkepticalReviewer
@@ -30,21 +31,6 @@ class OrchestrationEngine:
         self.topic = TopicStrategist(loader)
         self.reviewer = SkepticalReviewer(loader)
 
-    def _dispatch_delegation(self, state: SharedState, agent_name: str, task: str) -> TopicStrategistOutput | None:
-        if agent_name == "TopicStrategist":
-            topic_result = self.topic.run(task=task, state=state)
-            state.topic_pool = [topic_result.model_dump()]
-            return topic_result
-
-        state.timeline.append(
-            {
-                "event": "unhandled_delegation",
-                "agent": agent_name,
-                "task": task,
-            }
-        )
-        return None
-
     def run(self, goal: str, constraints: list[str] | None = None) -> OrchestrationResult:
         state = SharedState(goal_profile=GoalProfile(user_goal=goal, constraints=constraints or []))
 
@@ -52,10 +38,29 @@ class OrchestrationEngine:
         routes = route_delegations(chief_result)
 
         topic_result: TopicStrategistOutput | None = None
+
+        def run_topic(task: str) -> None:
+            nonlocal topic_result
+            topic_result = self.topic.run(task=task, state=state)
+            state.topic_pool = [topic_result.model_dump()]
+
+        specialist_router: dict[str, Callable[[str], None]] = {
+            "TopicStrategist": run_topic,
+            # Milestones 3-4 agents can be added here without changing control flow.
+        }
+
         for agent_name, task in routes:
-            delegated_result = self._dispatch_delegation(state=state, agent_name=agent_name, task=task)
-            if delegated_result is not None:
-                topic_result = delegated_result
+            handler = specialist_router.get(agent_name)
+            if handler:
+                handler(task)
+            else:
+                state.timeline.append(
+                    {
+                        "event": "unhandled_delegation",
+                        "agent": agent_name,
+                        "task": task,
+                    }
+                )
 
         reviewer_result = self.reviewer.run(task="Review the latest topic recommendation.", state=state)
         state.review_log.append(reviewer_result.model_dump())

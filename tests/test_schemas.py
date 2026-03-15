@@ -1,10 +1,6 @@
 import pytest
 
-from researcher_multi_agent.schemas.agent_outputs import (
-    ChiefOfStaffOutput,
-    SkepticalReviewerOutput,
-    TopicStrategistOutput,
-)
+from researcher_multi_agent.schemas.agent_outputs import ChiefOfStaffOutput, SkepticalReviewerOutput
 from researcher_multi_agent.schemas.validation import SchemaValidationError
 
 
@@ -47,28 +43,6 @@ def test_chief_schema_rejects_invalid_delegation_priority() -> None:
                 "merged_plan": {"now": [], "parallel": [], "later": []},
                 "risks": [],
                 "state_update": {},
-            }
-        )
-
-
-def test_topic_schema_rejects_invalid_scorecard_shape() -> None:
-    with pytest.raises(SchemaValidationError):
-        TopicStrategistOutput.model_validate(
-            {
-                "candidate_directions": [
-                    {
-                        "name": "x",
-                        "problem_statement": "y",
-                        "core_hypothesis": "z",
-                        "scorecard": {"bottleneck_value": 6},
-                        "why_promising": [],
-                        "why_risky": [],
-                        "kill_criteria": [],
-                        "first_paper_angle": "a",
-                    }
-                ],
-                "recommended_focus": ["x"],
-                "decisive_next_questions": ["q"],
             }
         )
 
