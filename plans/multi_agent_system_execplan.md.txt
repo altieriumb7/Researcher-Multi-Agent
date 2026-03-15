@@ -309,3 +309,19 @@ Use OpenAI models and a modular architecture so prompts, schemas, tools, and orc
   - rejection logging for non-dict `state_update` list payloads
 - Re-ran targeted orchestration tests and full test suite after the hardening updates.
 - Blockers: none.
+
+### Follow-up update: Hugging Face Spaces + Gradio packaging
+- Added a root-level `app.py` Gradio interface to run the existing manager-led orchestration engine end-to-end.
+- Added safe constraints parsing (newline/comma-separated) with deduplication.
+- Added user-facing validation and graceful runtime error handling in the UI layer (empty goal, missing API key, engine failure).
+- Added `requirements.txt` for Space deployment dependencies.
+- Updated `README.md` with Hugging Face Space YAML metadata and local run/setup instructions.
+- Preserved backend architecture and prompt files; no orchestration redesign.
+
+### Follow-up update: Space integration hardening review
+- Hardened `app.py` UX and reliability after integration review:
+  - clearer startup error if `gradio` is not installed
+  - removed fragile component arguments and initialized clearer status text
+  - fixed clear flow to reset both inputs and outputs (including raw JSON)
+- Kept manager-led backend orchestration unchanged; UI still calls `OrchestrationEngine` directly.
+- Expanded README deployment instructions with explicit Hugging Face Space setup + required secret.
