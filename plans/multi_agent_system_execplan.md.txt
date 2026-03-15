@@ -1,0 +1,122 @@
+# ExecPlan: Build a 7-agent research/application system with OpenAI models
+
+## Goal
+Build a manager-led multi-agent system for research planning, literature mapping, project design, supervisor targeting, outreach drafting, and internal review.
+
+## Why
+The user wants a practical AI system that coordinates up to 7 specialized agents with strong custom prompts, shared state, and reliable orchestration. The system should be useful for PhD/research workflows and later extensible to other complex planning tasks.
+
+## Scope
+Implement:
+- 1 manager agent:
+  - ChiefOfStaff
+- 6 specialist agents:
+  - TopicStrategist
+  - LiteratureCartographer
+  - ProjectArchitect
+  - SupervisorMapper
+  - NarrativeWriter
+  - SkepticalReviewer
+
+Use OpenAI models and a modular architecture so prompts, schemas, tools, and orchestration are separated cleanly.
+
+## Non-goals
+- Do not build a fully autonomous unsupervised internet crawler.
+- Do not implement every future workflow now.
+- Do not over-optimize UI before the core orchestration works.
+
+## Architecture
+- `src/agents/`
+  - one file per agent
+- `src/prompts/`
+  - one prompt file per agent
+- `src/schemas/`
+  - pydantic/json schemas for each agent output
+- `src/orchestrator/`
+  - manager routing logic
+  - shared state
+  - execution graph
+- `src/tools/`
+  - web search wrapper
+  - file/document wrapper
+- `tests/`
+  - orchestration tests
+  - schema validation tests
+  - smoke tests for each agent
+
+## Required behavior
+- ChiefOfStaff receives the user goal and decides which agents to call.
+- Each specialist returns structured JSON.
+- SkepticalReviewer reviews important outputs before they are accepted.
+- Shared state persists:
+  - goal_profile
+  - topic_pool
+  - reading_board
+  - project_board
+  - target_supervisors
+  - drafts
+  - review_log
+  - timeline
+
+## Milestones
+
+### Milestone 1: Skeleton
+- Create project structure.
+- Add config, environment loading, and model settings.
+- Add base agent abstraction.
+- Add shared state schema.
+- Add prompt loader.
+
+### Milestone 2: Core agents
+- Implement ChiefOfStaff, TopicStrategist, SkepticalReviewer.
+- Wire simple routing.
+- Add JSON schema validation.
+
+### Milestone 3: Research agents
+- Implement LiteratureCartographer and ProjectArchitect.
+- Add benchmark map + reading ladder support.
+- Add project design schema.
+
+### Milestone 4: Targeting and writing
+- Implement SupervisorMapper and NarrativeWriter.
+- Add output formats for ranked supervisors and outreach drafts.
+
+### Milestone 5: Full orchestration
+- Add review gates.
+- Add state updates after each completed stage.
+- Add logging/tracing hooks.
+
+### Milestone 6: Validation
+- Add tests for:
+  - routing decisions
+  - schema compliance
+  - state transitions
+  - review rejection/revision loops
+
+## Constraints
+- Keep prompts externalized in files.
+- Keep outputs machine-readable.
+- Keep agent responsibilities narrow and explicit.
+- Prefer a manager-led design over free-form swarm behavior.
+- Make it easy to swap models later.
+
+## Done when
+- A user can submit a high-level goal.
+- The system routes the task through the right agents.
+- The system returns:
+  - a narrowed topic
+  - a literature map
+  - a first project concept
+  - supervisor targets
+  - draft outreach text
+  - reviewer critique
+- Tests pass for the main orchestration path.
+
+## Decision log
+- Manager-led orchestration chosen over peer swarm for control and auditability.
+- Prompts stored as files for easier iteration.
+- JSON outputs required to support chaining and validation.
+
+## Open questions
+- Whether to use Responses API only or Agents SDK + Responses API.
+- Whether tool access is global or per-agent.

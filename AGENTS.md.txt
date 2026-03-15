@@ -1,0 +1,21 @@
+# AGENTS.md
+
+## Working mode
+- For any complex feature or significant refactor, use an ExecPlan from `plans/`.
+- Read the full plan before making edits.
+- Keep the plan updated as you progress.
+- Do not ask for generic “next steps” unless truly blocked.
+- Prefer correctness, clarity, and reliability over speed.
+- Reuse existing code and patterns before adding new abstractions.
+- Avoid speculative changes outside the requested scope.
+- Never use destructive git commands unless explicitly requested.
+
+## Project expectations
+- Keep prompts for agents in dedicated files under `prompts/`.
+- Keep agent outputs structured as JSON where possible.
+- Add tests for routing, schemas, and orchestration logic.
+- Summarize changed files and validation steps at the end.
+
+## Validation
+- Run tests after meaningful changes.
+- If a check cannot be run, say exactly why.
