@@ -25,6 +25,7 @@ from researcher_multi_agent.schemas.state import GoalProfile, SharedState
 from researcher_multi_agent.utils.prompt_loader import PromptLoader
 
 logger = logging.getLogger(__name__)
+MAX_DELEGATIONS_PER_RUN = 12
 
 
 @dataclass
@@ -93,6 +94,20 @@ class OrchestrationEngine:
     def _apply_chief_state_update(self, state: SharedState, chief_result: ChiefOfStaffOutput) -> None:
         state_update = chief_result.state_update
 
+        def _coerce_dict_list(key: str, value: object) -> list[dict] | None:
+            if not isinstance(value, list):
+                return None
+            if all(isinstance(item, dict) for item in value):
+                return value
+            dropped_event = {
+                "event": "chief_state_update_rejected",
+                "field": key,
+                "reason": "expected_list_of_dict",
+            }
+            state.timeline.append(dropped_event)
+            self._emit_trace(dropped_event)
+            return None
+
         goal_profile_update = state_update.get("goal_profile")
         if isinstance(goal_profile_update, dict) and goal_profile_update.get("user_goal"):
             state.goal_profile = GoalProfile(
@@ -109,8 +124,8 @@ class OrchestrationEngine:
             "review_log",
             "timeline",
         ]:
-            value = state_update.get(key)
-            if isinstance(value, list):
+            value = _coerce_dict_list(key=key, value=state_update.get(key))
+            if value is not None:
                 setattr(state, key, value)
 
     def run(self, goal: str, constraints: list[str] | None = None) -> OrchestrationResult:
@@ -120,6 +135,15 @@ class OrchestrationEngine:
         chief_result = self.chief.run(task=goal, state=state)
         self._apply_chief_state_update(state=state, chief_result=chief_result)
         routes = route_delegations(chief_result)
+        if len(routes) > MAX_DELEGATIONS_PER_RUN:
+            truncation_event = {
+                "event": "delegations_truncated",
+                "max_allowed": MAX_DELEGATIONS_PER_RUN,
+                "dropped_count": len(routes) - MAX_DELEGATIONS_PER_RUN,
+            }
+            state.timeline.append(truncation_event)
+            self._emit_trace(truncation_event)
+            routes = routes[:MAX_DELEGATIONS_PER_RUN]
         self._emit_trace({"event": "chief_plan_created", "delegations": len(routes)})
 
         topic_result: TopicStrategistOutput | None = None

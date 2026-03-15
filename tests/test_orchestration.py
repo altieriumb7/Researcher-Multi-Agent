@@ -376,3 +376,69 @@ def test_orchestration_records_specialist_failure_and_blocks_following() -> None
 
     assert result.skeptical_reviewer is not None
     assert result.state.review_log[-1]["stage"] == "final"
+
+
+def test_orchestration_truncates_excessive_delegations() -> None:
+    engine = OrchestrationEngine()
+
+    def fake_chief_run(task: str, state):
+        delegations = [
+            {
+                "agent": "UnknownAgent",
+                "task": f"task-{index}",
+                "why_this_agent": "",
+                "priority": "high",
+                "expected_output": "",
+            }
+            for index in range(15)
+        ]
+        return ChiefOfStaffOutput.model_validate(
+            {
+                "goal_now": "goal",
+                "assumptions": [],
+                "delegations": delegations,
+                "merged_plan": {"now": [], "parallel": [], "later": []},
+                "risks": [],
+                "state_update": {},
+            }
+        )
+
+    engine.chief.run = fake_chief_run  # type: ignore[method-assign]
+    result = engine.run(goal="test")
+
+    truncation_events = [item for item in result.state.timeline if item["event"] == "delegations_truncated"]
+    assert len(truncation_events) == 1
+    assert truncation_events[0]["max_allowed"] == 12
+    assert truncation_events[0]["dropped_count"] == 3
+
+    unhandled_events = [item for item in result.state.timeline if item["event"] == "unhandled_delegation"]
+    assert len(unhandled_events) == 12
+
+
+def test_orchestration_rejects_non_dict_chief_list_updates() -> None:
+    engine = OrchestrationEngine()
+
+    def fake_chief_run(task: str, state):
+        return ChiefOfStaffOutput.model_validate(
+            {
+                "goal_now": "goal",
+                "assumptions": [],
+                "delegations": [],
+                "merged_plan": {"now": [], "parallel": [], "later": []},
+                "risks": [],
+                "state_update": {
+                    "topic_pool": [{"seed": "ok"}],
+                    "timeline": ["bad-event", {"event": "good-event"}],
+                },
+            }
+        )
+
+    engine.chief.run = fake_chief_run  # type: ignore[method-assign]
+    result = engine.run(goal="test")
+
+    assert result.state.topic_pool == [{"seed": "ok"}]
+    assert result.state.timeline
+    rejection_events = [item for item in result.state.timeline if item["event"] == "chief_state_update_rejected"]
+    assert len(rejection_events) == 1
+    assert rejection_events[0]["field"] == "timeline"
+    assert rejection_events[0]["reason"] == "expected_list_of_dict"
