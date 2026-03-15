@@ -294,3 +294,18 @@ Use OpenAI models and a modular architecture so prompts, schemas, tools, and orc
   - orchestration test for specialist runtime failure + downstream block behavior
 - Re-ran full test suite after updates.
 - Blockers: none.
+
+### Follow-up adjustments after hostile-review pass
+- Conducted a hostile senior-review style failure analysis against messy real-world inputs in orchestration.
+- Concrete failure scenarios identified:
+  1. Unbounded delegations from `ChiefOfStaff` can inflate timeline/state and cause noisy, costly runs.
+  2. `ChiefOfStaff.state_update` accepted arbitrary list payloads, allowing non-dict timeline entries that can break event consumers expecting dict-shaped records.
+  3. Mixed-quality manager state patches (partially valid / partially malformed) were not explicitly audited, reducing diagnosability.
+- Implemented hardening patches for the highest-risk scenarios:
+  - Added a delegation safety cap (`MAX_DELEGATIONS_PER_RUN = 12`) in orchestration with explicit `delegations_truncated` timeline/trace event.
+  - Added strict `state_update` coercion for list-backed state fields to require `list[dict]`; malformed entries are rejected with `chief_state_update_rejected` events instead of being silently applied.
+- Added regression tests to lock behavior:
+  - delegation truncation and dropped-count accounting
+  - rejection logging for non-dict `state_update` list payloads
+- Re-ran targeted orchestration tests and full test suite after the hardening updates.
+- Blockers: none.
