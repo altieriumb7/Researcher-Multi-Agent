@@ -16,7 +16,10 @@ class ChiefOfStaff(DeterministicAgent[ChiefOfStaffOutput]):
 
     def _build_payload(self, task: str, state: SharedState) -> dict:
         has_topic = bool(state.topic_pool)
+        has_literature_map = bool(state.reading_board)
+        has_project_design = bool(state.project_board)
         delegations = []
+
         if not has_topic:
             delegations.append(
                 {
@@ -28,14 +31,36 @@ class ChiefOfStaff(DeterministicAgent[ChiefOfStaffOutput]):
                 }
             )
 
+        if not has_literature_map:
+            delegations.append(
+                {
+                    "agent": "LiteratureCartographer",
+                    "task": "Build a literature map and a short reading ladder for the selected topic.",
+                    "why_this_agent": "Need an evidence and benchmark map to ground next project decisions.",
+                    "priority": "medium",
+                    "expected_output": "Clustered literature map, benchmark map, and reading ladder.",
+                }
+            )
+
+        if not has_project_design:
+            delegations.append(
+                {
+                    "agent": "ProjectArchitect",
+                    "task": "Design a feasible first project grounded in the mapped literature.",
+                    "why_this_agent": "Need a concrete, falsifiable project plan after literature grounding.",
+                    "priority": "low",
+                    "expected_output": "Structured project design with methods, baselines, metrics, and timeline.",
+                }
+            )
+
         return {
             "goal_now": "Create a narrow research direction and quality-check it.",
             "assumptions": ["The user goal is still broad and exploratory."],
             "delegations": delegations,
             "merged_plan": {
-                "now": ["Run TopicStrategist", "Run SkepticalReviewer"],
+                "now": ["Run TopicStrategist", "Run LiteratureCartographer", "Run ProjectArchitect", "Run SkepticalReviewer"],
                 "parallel": [],
-                "later": ["Prepare literature mapping once topic is accepted"],
+                "later": ["Prepare supervisor targeting and outreach draft"],
             },
             "risks": ["Topic may remain too vague without strict criteria."],
             "state_update": {

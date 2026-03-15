@@ -138,7 +138,38 @@ Use OpenAI models and a modular architecture so prompts, schemas, tools, and orc
   - Tests added for schema validation, routing order, orchestration path, and unhandled delegation logging.
 
 ### Still missing (outside Milestones 1-2)
-- ⏳ Milestone 3: `LiteratureCartographer`, `ProjectArchitect`, and related schemas/state updates.
+- ✅ Milestone 3: `LiteratureCartographer`, `ProjectArchitect`, related schemas, and orchestrator/state updates implemented.
 - ⏳ Milestone 4: `SupervisorMapper`, `NarrativeWriter`, and output formats.
 - ⏳ Milestone 5: full review gates, richer state transitions, tracing hooks.
 - ⏳ Milestone 6: broader validation suite (state transitions, revision loops, additional smoke/integration coverage).
+
+
+### Latest update (Milestone 3)
+- Added deterministic specialist agents:
+  - `LiteratureCartographer`
+  - `ProjectArchitect`
+- Added structured output schemas for literature mapping and project design with explicit nested validation.
+- Integrated both agents into the existing manager-led orchestrator via the specialist router, preserving architecture.
+- Added tests covering:
+  - literature-map schema validation
+  - project-design schema validation
+  - routing and state updates for Milestone 3 agent execution
+- No blockers encountered for Milestone 3 implementation.
+
+- Milestone 3 delegates are routed through the existing specialist-router map to keep extension points stable.
+
+
+### Follow-up adjustments after Milestone 3 review
+- Added dependency-aware orchestration guards:
+  - `LiteratureCartographer` now requires `topic_pool`.
+  - `ProjectArchitect` now requires `reading_board`.
+- Added timeline events for successful specialist executions (`delegation_executed`) to make routing/state transitions auditable in tests.
+- Expanded tests to cover dependency-skip behavior and stronger schema rejection cases for nested fields.
+- Blockers: none.
+
+
+### Follow-up adjustments after second Milestone 3 review
+- Refined `ChiefOfStaff` delegation rationale text for `LiteratureCartographer` to avoid implying dependencies are already satisfied at planning time.
+- Added explicit orchestration test for `LiteratureCartographer` dependency skip when `topic_pool` is missing.
+- Re-ran full test suite after fixes.
+- Blockers: none.

@@ -177,3 +177,203 @@ class SkepticalReviewerOutput:
 
     def model_dump(self) -> dict[str, Any]:
         return asdict(self)
+
+
+@dataclass
+class LiteratureCluster:
+    cluster_name: str
+    why_it_matters: str
+    key_papers: list[str]
+    benchmarks: list[str]
+    methods: list[str]
+    open_disputes: list[str]
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "LiteratureCluster":
+        require_fields(
+            payload,
+            ["cluster_name", "why_it_matters", "key_papers", "benchmarks", "methods", "open_disputes"],
+            "LiteratureCluster",
+        )
+        return cls(**payload)
+
+    def model_dump(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class ReadingLadderStep:
+    day: int
+    goal: str
+    papers: list[str]
+    notes_to_extract: list[str]
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "ReadingLadderStep":
+        require_fields(payload, ["day", "goal", "papers", "notes_to_extract"], "ReadingLadderStep")
+        return cls(**payload)
+
+    def model_dump(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class LiteratureCartographerOutput:
+    topic: str
+    clusters: list[LiteratureCluster]
+    must_read: list[str]
+    optional_read: list[str]
+    benchmark_map: list[str]
+    evidence_gaps: list[str]
+    reading_ladder: list[ReadingLadderStep]
+
+    @classmethod
+    def model_validate(cls, payload: dict[str, Any]) -> "LiteratureCartographerOutput":
+        require_fields(
+            payload,
+            ["topic", "clusters", "must_read", "optional_read", "benchmark_map", "evidence_gaps", "reading_ladder"],
+            "LiteratureCartographerOutput",
+        )
+        clusters = [LiteratureCluster.from_dict(item) for item in payload["clusters"]]
+        reading_ladder = [ReadingLadderStep.from_dict(item) for item in payload["reading_ladder"]]
+        if not clusters:
+            raise SchemaValidationError("LiteratureCartographerOutput requires at least one cluster")
+        if not reading_ladder:
+            raise SchemaValidationError("LiteratureCartographerOutput requires a reading ladder")
+        return cls(
+            topic=payload["topic"],
+            clusters=clusters,
+            must_read=payload["must_read"],
+            optional_read=payload["optional_read"],
+            benchmark_map=payload["benchmark_map"],
+            evidence_gaps=payload["evidence_gaps"],
+            reading_ladder=reading_ladder,
+        )
+
+    def model_dump(self) -> dict[str, Any]:
+        return {
+            "topic": self.topic,
+            "clusters": [cluster.model_dump() for cluster in self.clusters],
+            "must_read": self.must_read,
+            "optional_read": self.optional_read,
+            "benchmark_map": self.benchmark_map,
+            "evidence_gaps": self.evidence_gaps,
+            "reading_ladder": [step.model_dump() for step in self.reading_ladder],
+        }
+
+
+@dataclass
+class ProjectEvaluation:
+    primary_metrics: list[str]
+    secondary_metrics: list[str]
+    ablations: list[str]
+    stress_tests: list[str]
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "ProjectEvaluation":
+        require_fields(
+            payload,
+            ["primary_metrics", "secondary_metrics", "ablations", "stress_tests"],
+            "ProjectEvaluation",
+        )
+        return cls(**payload)
+
+    def model_dump(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class ProjectResources:
+    compute: str
+    data_needs: str
+    engineering_needs: str
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "ProjectResources":
+        require_fields(payload, ["compute", "data_needs", "engineering_needs"], "ProjectResources")
+        return cls(**payload)
+
+    def model_dump(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class ProjectTimeline:
+    week_1_2: list[str]
+    week_3_4: list[str]
+    week_5_8: list[str]
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "ProjectTimeline":
+        require_fields(payload, ["week_1_2", "week_3_4", "week_5_8"], "ProjectTimeline")
+        return cls(**payload)
+
+    def model_dump(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class ProjectArchitectOutput:
+    project_title: str
+    research_question: str
+    hypothesis: str
+    minimal_publishable_claim: str
+    datasets_tasks: list[str]
+    baselines: list[str]
+    method_outline: list[str]
+    evaluation: ProjectEvaluation
+    resources: ProjectResources
+    timeline: ProjectTimeline
+    major_risks: list[str]
+    fallback_versions: list[str]
+
+    @classmethod
+    def model_validate(cls, payload: dict[str, Any]) -> "ProjectArchitectOutput":
+        require_fields(
+            payload,
+            [
+                "project_title",
+                "research_question",
+                "hypothesis",
+                "minimal_publishable_claim",
+                "datasets_tasks",
+                "baselines",
+                "method_outline",
+                "evaluation",
+                "resources",
+                "timeline",
+                "major_risks",
+                "fallback_versions",
+            ],
+            "ProjectArchitectOutput",
+        )
+        return cls(
+            project_title=payload["project_title"],
+            research_question=payload["research_question"],
+            hypothesis=payload["hypothesis"],
+            minimal_publishable_claim=payload["minimal_publishable_claim"],
+            datasets_tasks=payload["datasets_tasks"],
+            baselines=payload["baselines"],
+            method_outline=payload["method_outline"],
+            evaluation=ProjectEvaluation.from_dict(payload["evaluation"]),
+            resources=ProjectResources.from_dict(payload["resources"]),
+            timeline=ProjectTimeline.from_dict(payload["timeline"]),
+            major_risks=payload["major_risks"],
+            fallback_versions=payload["fallback_versions"],
+        )
+
+    def model_dump(self) -> dict[str, Any]:
+        return {
+            "project_title": self.project_title,
+            "research_question": self.research_question,
+            "hypothesis": self.hypothesis,
+            "minimal_publishable_claim": self.minimal_publishable_claim,
+            "datasets_tasks": self.datasets_tasks,
+            "baselines": self.baselines,
+            "method_outline": self.method_outline,
+            "evaluation": self.evaluation.model_dump(),
+            "resources": self.resources.model_dump(),
+            "timeline": self.timeline.model_dump(),
+            "major_risks": self.major_risks,
+            "fallback_versions": self.fallback_versions,
+        }
