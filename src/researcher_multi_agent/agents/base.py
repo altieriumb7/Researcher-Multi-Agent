@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from typing import Generic, TypeVar
 
 from researcher_multi_agent.schemas.state import SharedState
+from researcher_multi_agent.schemas.validation import SchemaValidationError
 
 T = TypeVar("T")
 
@@ -30,4 +31,8 @@ class DeterministicAgent(BaseAgent[T], ABC):
 
     def run(self, task: str, state: SharedState) -> T:
         payload = self._build_payload(task=task, state=state)
+        if not isinstance(payload, dict):
+            raise SchemaValidationError(
+                f"{self.name} produced malformed payload type: {type(payload).__name__}; expected dict"
+            )
         return self.output_model.model_validate(payload)

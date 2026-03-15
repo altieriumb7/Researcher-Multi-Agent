@@ -249,3 +249,48 @@ Use OpenAI models and a modular architecture so prompts, schemas, tools, and orc
 - Added orchestration test coverage for chief-provided list-state updates persistence.
 - Re-ran full test suite after updates.
 - Blockers: none.
+
+
+### Latest update (Milestone 6)
+- Added validation/hardening tests for:
+  - malformed non-dict agent payload handling in deterministic agents
+  - partial agent payload schema failures
+  - prompt loading success/failure paths with explicit prompt directories
+  - reviewer `REVISE` gate behavior that blocks downstream stages
+  - explicit orchestration failure surfacing for invalid manager schema output
+  - narrative writer schema round-trip compliance
+- Hardened base deterministic agent runtime validation:
+  - added explicit payload type guard (`dict` required) before schema validation to fail fast on malformed outputs.
+- Full suite re-run after hardening changes.
+
+### Milestone 6 audit findings and fixes
+- Issue: deterministic agents could return non-dict payloads and fail with less actionable errors deeper in schema code.
+  - Fix: added explicit payload type assertion in `DeterministicAgent.run` raising `SchemaValidationError` with agent context.
+- Issue: revision/rejection gating behavior had good `REJECT` coverage but weaker explicit `REVISE` path coverage.
+  - Fix: added orchestration test asserting `REVISE` blocks all subsequent delegations.
+- Issue: prompt loader behavior was not explicitly tested for custom prompt directories and missing files.
+  - Fix: added prompt loader tests for both paths.
+- Issue: malformed/partial outputs were not comprehensively covered beyond schema unit tests.
+  - Fix: added dedicated hardening tests for malformed and partial deterministic-agent payloads.
+
+### Remaining technical debt
+- Orchestrator currently blocks on non-PASS review verdicts without an automatic retry/revision execution loop.
+- State transition logic still uses per-agent inline handlers in one method; maintainability could improve with small stage objects if complexity grows.
+- Schema layer relies on custom dataclass validation helpers instead of a fully declarative typed schema framework; this is adequate now but may need stronger static typing as agent outputs expand.
+
+### Recommended next steps
+1. Add an optional bounded retry loop for `REVISE` verdicts that re-runs only the failed stage with reviewer instructions appended.
+2. Introduce typed stage descriptors (agent name, dependencies, state sink key) to reduce duplicated orchestration branching as new agents are added.
+3. Add fault-injection integration tests for mid-pipeline exceptions and ensure timeline snapshots remain consistent under failures.
+
+
+### Follow-up adjustments after Milestone 6 review
+- Hardened orchestration failure handling for specialist-stage exceptions:
+  - specialist execution failures are now captured as `delegation_failed` timeline events with explicit error context.
+  - pipeline switches into blocked mode after a failed stage to avoid cascading invalid state transitions.
+  - final review still executes so runs terminate with a complete audit trail.
+- Expanded validation coverage with additional edge-case tests:
+  - explicit `TopicStrategistOutput` acceptance/rejection tests
+  - orchestration test for specialist runtime failure + downstream block behavior
+- Re-ran full test suite after updates.
+- Blockers: none.
