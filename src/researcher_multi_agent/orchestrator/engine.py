@@ -91,12 +91,27 @@ class OrchestrationEngine:
         return review.verdict == "PASS"
 
     def _apply_chief_state_update(self, state: SharedState, chief_result: ChiefOfStaffOutput) -> None:
-        goal_profile_update = chief_result.state_update.get("goal_profile")
+        state_update = chief_result.state_update
+
+        goal_profile_update = state_update.get("goal_profile")
         if isinstance(goal_profile_update, dict) and goal_profile_update.get("user_goal"):
             state.goal_profile = GoalProfile(
                 user_goal=goal_profile_update["user_goal"],
                 constraints=list(goal_profile_update.get("constraints", [])),
             )
+
+        for key in [
+            "topic_pool",
+            "reading_board",
+            "project_board",
+            "target_supervisors",
+            "drafts",
+            "review_log",
+            "timeline",
+        ]:
+            value = state_update.get(key)
+            if isinstance(value, list):
+                setattr(state, key, value)
 
     def run(self, goal: str, constraints: list[str] | None = None) -> OrchestrationResult:
         state = SharedState(goal_profile=GoalProfile(user_goal=goal, constraints=constraints or []))

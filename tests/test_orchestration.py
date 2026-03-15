@@ -322,3 +322,29 @@ def test_orchestration_applies_chief_goal_profile_state_update() -> None:
     assert result.state.goal_profile.user_goal == "updated goal"
     assert result.state.goal_profile.constraints == ["time-boxed", "low compute"]
 
+
+
+def test_orchestration_applies_chief_list_state_updates() -> None:
+    engine = OrchestrationEngine()
+
+    def fake_chief_run(task: str, state):
+        return ChiefOfStaffOutput.model_validate(
+            {
+                "goal_now": "goal",
+                "assumptions": [],
+                "delegations": [],
+                "merged_plan": {"now": [], "parallel": [], "later": []},
+                "risks": [],
+                "state_update": {
+                    "topic_pool": [{"seed": "topic"}],
+                    "timeline": [{"event": "seeded_by_chief"}],
+                },
+            }
+        )
+
+    engine.chief.run = fake_chief_run  # type: ignore[method-assign]
+    result = engine.run(goal="original goal")
+
+    assert result.state.topic_pool == [{"seed": "topic"}]
+    assert result.state.timeline[0] == {"event": "seeded_by_chief"}
+

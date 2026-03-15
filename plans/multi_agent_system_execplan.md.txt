@@ -241,3 +241,11 @@ Use OpenAI models and a modular architecture so prompts, schemas, tools, and orc
   - chief goal-profile state updates are persisted.
 - Re-ran full test suite after updates.
 - Blockers: none.
+
+
+### Follow-up adjustments after Milestone 5 review (round 2)
+- Simplified deterministic review-gate parsing in `SkepticalReviewer` to use an explicit `Review gate for <Stage>.` prefix parse, keeping stage checks deterministic and easier to reason about.
+- Simplified/expanded manager state-application logic to persist additional list-based `state_update` fields (`topic_pool`, `reading_board`, `project_board`, `target_supervisors`, `drafts`, `review_log`, `timeline`) when provided.
+- Added orchestration test coverage for chief-provided list-state updates persistence.
+- Re-ran full test suite after updates.
+- Blockers: none.

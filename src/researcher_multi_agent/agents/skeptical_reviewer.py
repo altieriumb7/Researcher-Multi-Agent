@@ -23,8 +23,12 @@ class SkepticalReviewer(DeterministicAgent[SkepticalReviewerOutput]):
             "NarrativeWriter": ("drafts", "outreach draft from NarrativeWriter"),
         }
 
-        for stage, (field_name, label) in stage_requirements.items():
-            if f"Review gate for {stage}" in task:
+        review_gate_prefix = "Review gate for "
+        if task.startswith(review_gate_prefix):
+            stage = task.removeprefix(review_gate_prefix).removesuffix(".")
+            requirement = stage_requirements.get(stage)
+            if requirement is not None:
+                field_name, label = requirement
                 if getattr(state, field_name):
                     return {
                         "verdict": "PASS",
