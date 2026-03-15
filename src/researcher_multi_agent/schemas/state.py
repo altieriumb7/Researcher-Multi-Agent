@@ -22,3 +22,4 @@ class SharedState:
     drafts: list[dict] = field(default_factory=list)
     review_log: list[dict] = field(default_factory=list)
     timeline: list[dict] = field(default_factory=list)
+    state_snapshots: list[dict] = field(default_factory=list)

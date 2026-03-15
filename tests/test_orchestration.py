@@ -1,8 +1,8 @@
 from researcher_multi_agent.orchestrator.engine import OrchestrationEngine
-from researcher_multi_agent.schemas.agent_outputs import ChiefOfStaffOutput
+from researcher_multi_agent.schemas.agent_outputs import ChiefOfStaffOutput, SkepticalReviewerOutput
 
 
-def test_orchestration_runs_milestone4_path() -> None:
+def test_orchestration_runs_milestone5_end_to_end_path() -> None:
     engine = OrchestrationEngine()
     result = engine.run(goal="Find a strong first PhD project direction in oversight")
 
@@ -22,6 +22,25 @@ def test_orchestration_runs_milestone4_path() -> None:
 
     executed = [item["agent"] for item in result.state.timeline if item["event"] == "delegation_executed"]
     assert executed == ["TopicStrategist", "LiteratureCartographer", "ProjectArchitect", "SupervisorMapper", "NarrativeWriter"]
+
+    review_stages = [item["stage"] for item in result.state.review_log]
+    assert review_stages == [
+        "TopicStrategist",
+        "LiteratureCartographer",
+        "ProjectArchitect",
+        "SupervisorMapper",
+        "NarrativeWriter",
+        "final",
+    ]
+    stage_verdicts = {item["stage"]: item["verdict"] for item in result.state.review_log}
+    assert stage_verdicts["TopicStrategist"] == "PASS"
+    assert stage_verdicts["LiteratureCartographer"] == "PASS"
+    assert stage_verdicts["ProjectArchitect"] == "PASS"
+    assert stage_verdicts["SupervisorMapper"] == "PASS"
+    assert stage_verdicts["NarrativeWriter"] == "PASS"
+
+    assert result.state.state_snapshots[0]["stage"] == "initialized"
+    assert result.state.state_snapshots[-1]["stage"] == "final"
 
 
 def test_orchestration_records_unhandled_delegations() -> None:
@@ -56,6 +75,51 @@ def test_orchestration_records_unhandled_delegations() -> None:
     assert result.supervisor_mapper is None
     assert result.narrative_writer is None
     assert result.state.timeline[0]["event"] == "unhandled_delegation"
+
+
+def test_review_gate_blocks_following_stages_when_rejected() -> None:
+    engine = OrchestrationEngine()
+
+    def fake_reviewer_run(task: str, state):
+        if task.startswith("Review gate for TopicStrategist"):
+            return SkepticalReviewerOutput.model_validate(
+                {
+                    "verdict": "REJECT",
+                    "critical_issues": ["Invalid topic framing"],
+                    "minor_issues": [],
+                    "unsupported_claims": [],
+                    "revision_instructions": ["Re-run topic stage"],
+                    "confidence": "high",
+                }
+            )
+        return SkepticalReviewerOutput.model_validate(
+            {
+                "verdict": "PASS",
+                "critical_issues": [],
+                "minor_issues": [],
+                "unsupported_claims": [],
+                "revision_instructions": [],
+                "confidence": "medium",
+            }
+        )
+
+    engine.reviewer.run = fake_reviewer_run  # type: ignore[method-assign]
+    result = engine.run(goal="test")
+
+    assert result.topic_strategist is not None
+    assert result.literature_cartographer is None
+    assert result.project_architect is None
+    assert result.supervisor_mapper is None
+    assert result.narrative_writer is None
+
+    blocked_events = [item for item in result.state.timeline if item["event"] == "delegation_blocked_by_review_gate"]
+    assert blocked_events
+    assert {event["agent"] for event in blocked_events} == {
+        "LiteratureCartographer",
+        "ProjectArchitect",
+        "SupervisorMapper",
+        "NarrativeWriter",
+    }
 
 
 def test_milestone3_skips_project_when_literature_missing() -> None:
@@ -217,3 +281,70 @@ def test_milestone4_skips_narrative_writer_when_project_missing() -> None:
     assert not result.state.drafts
     assert result.state.timeline[0]["event"] == "delegation_skipped_missing_dependency"
     assert result.state.timeline[0]["requires"] == "project_board"
+
+
+def test_orchestration_emits_trace_hook_events() -> None:
+    traced_events: list[dict] = []
+    engine = OrchestrationEngine(trace_hook=traced_events.append)
+
+    _ = engine.run(goal="Find a strong first PhD project direction in oversight")
+
+    assert traced_events
+    assert any(event["event"] == "chief_plan_created" for event in traced_events)
+    assert any(event["event"] == "state_snapshot" for event in traced_events)
+    assert any(event["event"] == "final_review_completed" for event in traced_events)
+
+
+def test_orchestration_applies_chief_goal_profile_state_update() -> None:
+    engine = OrchestrationEngine()
+
+    def fake_chief_run(task: str, state):
+        return ChiefOfStaffOutput.model_validate(
+            {
+                "goal_now": "goal",
+                "assumptions": [],
+                "delegations": [],
+                "merged_plan": {"now": [], "parallel": [], "later": []},
+                "risks": [],
+                "state_update": {
+                    "goal_profile": {
+                        "user_goal": "updated goal",
+                        "constraints": ["time-boxed", "low compute"],
+                    }
+                },
+            }
+        )
+
+    engine.chief.run = fake_chief_run  # type: ignore[method-assign]
+    result = engine.run(goal="original goal")
+
+    assert result.state.goal_profile is not None
+    assert result.state.goal_profile.user_goal == "updated goal"
+    assert result.state.goal_profile.constraints == ["time-boxed", "low compute"]
+
+
+
+def test_orchestration_applies_chief_list_state_updates() -> None:
+    engine = OrchestrationEngine()
+
+    def fake_chief_run(task: str, state):
+        return ChiefOfStaffOutput.model_validate(
+            {
+                "goal_now": "goal",
+                "assumptions": [],
+                "delegations": [],
+                "merged_plan": {"now": [], "parallel": [], "later": []},
+                "risks": [],
+                "state_update": {
+                    "topic_pool": [{"seed": "topic"}],
+                    "timeline": [{"event": "seeded_by_chief"}],
+                },
+            }
+        )
+
+    engine.chief.run = fake_chief_run  # type: ignore[method-assign]
+    result = engine.run(goal="original goal")
+
+    assert result.state.topic_pool == [{"seed": "topic"}]
+    assert result.state.timeline[0] == {"event": "seeded_by_chief"}
+

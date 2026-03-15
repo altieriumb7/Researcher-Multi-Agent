@@ -15,15 +15,56 @@ class SkepticalReviewer(DeterministicAgent[SkepticalReviewerOutput]):
         return SkepticalReviewerOutput
 
     def _build_payload(self, task: str, state: SharedState) -> dict:
-        has_topic = bool(state.topic_pool)
-        if has_topic:
+        stage_requirements = {
+            "TopicStrategist": ("topic_pool", "candidate directions from TopicStrategist"),
+            "LiteratureCartographer": ("reading_board", "literature map from LiteratureCartographer"),
+            "ProjectArchitect": ("project_board", "project design from ProjectArchitect"),
+            "SupervisorMapper": ("target_supervisors", "supervisor targeting from SupervisorMapper"),
+            "NarrativeWriter": ("drafts", "outreach draft from NarrativeWriter"),
+        }
+
+        review_gate_prefix = "Review gate for "
+        if task.startswith(review_gate_prefix):
+            stage = task.removeprefix(review_gate_prefix).removesuffix(".")
+            requirement = stage_requirements.get(stage)
+            if requirement is not None:
+                field_name, label = requirement
+                if getattr(state, field_name):
+                    return {
+                        "verdict": "PASS",
+                        "critical_issues": [],
+                        "minor_issues": [],
+                        "unsupported_claims": [],
+                        "revision_instructions": [],
+                        "confidence": "medium",
+                    }
+                return {
+                    "verdict": "REVISE",
+                    "critical_issues": [f"Missing required artifact: {label}."],
+                    "minor_issues": [],
+                    "unsupported_claims": [],
+                    "revision_instructions": [f"Run {stage} and resubmit for review."],
+                    "confidence": "high",
+                }
+
+        if state.drafts:
             return {
                 "verdict": "PASS",
                 "critical_issues": [],
-                "minor_issues": ["Need literature grounding before supervisor outreach."],
+                "minor_issues": ["Next step: tailor final draft per supervisor profile."],
                 "unsupported_claims": [],
-                "revision_instructions": ["Proceed to literature mapping in next milestone."],
+                "revision_instructions": ["Proceed with customization and sending strategy."],
                 "confidence": "medium",
+            }
+
+        if state.topic_pool:
+            return {
+                "verdict": "REVISE",
+                "critical_issues": ["Planning pipeline incomplete: no outreach draft available."],
+                "minor_issues": [],
+                "unsupported_claims": [],
+                "revision_instructions": ["Complete remaining stages before final review."],
+                "confidence": "high",
             }
 
         return {

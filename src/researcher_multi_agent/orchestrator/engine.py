@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Callable
 
@@ -23,6 +24,8 @@ from researcher_multi_agent.schemas.agent_outputs import (
 from researcher_multi_agent.schemas.state import GoalProfile, SharedState
 from researcher_multi_agent.utils.prompt_loader import PromptLoader
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class OrchestrationResult:
@@ -37,7 +40,11 @@ class OrchestrationResult:
 
 
 class OrchestrationEngine:
-    def __init__(self, prompt_loader: PromptLoader | None = None) -> None:
+    def __init__(
+        self,
+        prompt_loader: PromptLoader | None = None,
+        trace_hook: Callable[[dict], None] | None = None,
+    ) -> None:
         loader = prompt_loader or PromptLoader()
         self.chief = ChiefOfStaff(loader)
         self.topic = TopicStrategist(loader)
@@ -46,18 +53,81 @@ class OrchestrationEngine:
         self.supervisor_mapper = SupervisorMapper(loader)
         self.narrative_writer = NarrativeWriter(loader)
         self.reviewer = SkepticalReviewer(loader)
+        self.trace_hook = trace_hook
+
+    def _emit_trace(self, event: dict) -> None:
+        logger.info("orchestration_event", extra={"event_payload": event})
+        if self.trace_hook is not None:
+            self.trace_hook(event)
+
+    def _snapshot_state(self, state: SharedState, stage: str) -> None:
+        snapshot = {
+            "stage": stage,
+            "topic_pool": len(state.topic_pool),
+            "reading_board": len(state.reading_board),
+            "project_board": len(state.project_board),
+            "target_supervisors": len(state.target_supervisors),
+            "drafts": len(state.drafts),
+            "review_log": len(state.review_log),
+            "timeline": len(state.timeline),
+        }
+        state.state_snapshots.append(snapshot)
+        self._emit_trace({"event": "state_snapshot", **snapshot})
+
+    def _run_review_gate(self, state: SharedState, stage: str) -> bool:
+        review = self.reviewer.run(task=f"Review gate for {stage}.", state=state)
+        review_payload = review.model_dump()
+        review_payload["stage"] = stage
+        state.review_log.append(review_payload)
+
+        gate_event = {
+            "event": "review_gate",
+            "stage": stage,
+            "verdict": review.verdict,
+        }
+        state.timeline.append(gate_event)
+        self._emit_trace(gate_event)
+
+        return review.verdict == "PASS"
+
+    def _apply_chief_state_update(self, state: SharedState, chief_result: ChiefOfStaffOutput) -> None:
+        state_update = chief_result.state_update
+
+        goal_profile_update = state_update.get("goal_profile")
+        if isinstance(goal_profile_update, dict) and goal_profile_update.get("user_goal"):
+            state.goal_profile = GoalProfile(
+                user_goal=goal_profile_update["user_goal"],
+                constraints=list(goal_profile_update.get("constraints", [])),
+            )
+
+        for key in [
+            "topic_pool",
+            "reading_board",
+            "project_board",
+            "target_supervisors",
+            "drafts",
+            "review_log",
+            "timeline",
+        ]:
+            value = state_update.get(key)
+            if isinstance(value, list):
+                setattr(state, key, value)
 
     def run(self, goal: str, constraints: list[str] | None = None) -> OrchestrationResult:
         state = SharedState(goal_profile=GoalProfile(user_goal=goal, constraints=constraints or []))
+        self._snapshot_state(state, stage="initialized")
 
         chief_result = self.chief.run(task=goal, state=state)
+        self._apply_chief_state_update(state=state, chief_result=chief_result)
         routes = route_delegations(chief_result)
+        self._emit_trace({"event": "chief_plan_created", "delegations": len(routes)})
 
         topic_result: TopicStrategistOutput | None = None
         literature_result: LiteratureCartographerOutput | None = None
         project_result: ProjectArchitectOutput | None = None
         supervisor_result: SupervisorMapperOutput | None = None
         narrative_result: NarrativeWriterOutput | None = None
+        review_gate_failed = False
 
         def run_topic(task: str) -> bool:
             nonlocal topic_result
@@ -68,14 +138,14 @@ class OrchestrationEngine:
         def run_literature(task: str) -> bool:
             nonlocal literature_result
             if not state.topic_pool:
-                state.timeline.append(
-                    {
-                        "event": "delegation_skipped_missing_dependency",
-                        "agent": "LiteratureCartographer",
-                        "task": task,
-                        "requires": "topic_pool",
-                    }
-                )
+                skip_event = {
+                    "event": "delegation_skipped_missing_dependency",
+                    "agent": "LiteratureCartographer",
+                    "task": task,
+                    "requires": "topic_pool",
+                }
+                state.timeline.append(skip_event)
+                self._emit_trace(skip_event)
                 return False
             literature_result = self.literature.run(task=task, state=state)
             state.reading_board = [literature_result.model_dump()]
@@ -84,31 +154,30 @@ class OrchestrationEngine:
         def run_project(task: str) -> bool:
             nonlocal project_result
             if not state.reading_board:
-                state.timeline.append(
-                    {
-                        "event": "delegation_skipped_missing_dependency",
-                        "agent": "ProjectArchitect",
-                        "task": task,
-                        "requires": "reading_board",
-                    }
-                )
+                skip_event = {
+                    "event": "delegation_skipped_missing_dependency",
+                    "agent": "ProjectArchitect",
+                    "task": task,
+                    "requires": "reading_board",
+                }
+                state.timeline.append(skip_event)
+                self._emit_trace(skip_event)
                 return False
             project_result = self.project.run(task=task, state=state)
             state.project_board = [project_result.model_dump()]
             return True
 
-
         def run_supervisor_mapper(task: str) -> bool:
             nonlocal supervisor_result
             if not state.project_board:
-                state.timeline.append(
-                    {
-                        "event": "delegation_skipped_missing_dependency",
-                        "agent": "SupervisorMapper",
-                        "task": task,
-                        "requires": "project_board",
-                    }
-                )
+                skip_event = {
+                    "event": "delegation_skipped_missing_dependency",
+                    "agent": "SupervisorMapper",
+                    "task": task,
+                    "requires": "project_board",
+                }
+                state.timeline.append(skip_event)
+                self._emit_trace(skip_event)
                 return False
             supervisor_result = self.supervisor_mapper.run(task=task, state=state)
             state.target_supervisors = [supervisor_result.model_dump()]
@@ -117,28 +186,29 @@ class OrchestrationEngine:
         def run_narrative_writer(task: str) -> bool:
             nonlocal narrative_result
             if not state.project_board:
-                state.timeline.append(
-                    {
-                        "event": "delegation_skipped_missing_dependency",
-                        "agent": "NarrativeWriter",
-                        "task": task,
-                        "requires": "project_board",
-                    }
-                )
+                skip_event = {
+                    "event": "delegation_skipped_missing_dependency",
+                    "agent": "NarrativeWriter",
+                    "task": task,
+                    "requires": "project_board",
+                }
+                state.timeline.append(skip_event)
+                self._emit_trace(skip_event)
                 return False
             if not state.target_supervisors:
-                state.timeline.append(
-                    {
-                        "event": "delegation_skipped_missing_dependency",
-                        "agent": "NarrativeWriter",
-                        "task": task,
-                        "requires": "target_supervisors",
-                    }
-                )
+                skip_event = {
+                    "event": "delegation_skipped_missing_dependency",
+                    "agent": "NarrativeWriter",
+                    "task": task,
+                    "requires": "target_supervisors",
+                }
+                state.timeline.append(skip_event)
+                self._emit_trace(skip_event)
                 return False
             narrative_result = self.narrative_writer.run(task=task, state=state)
             state.drafts = [narrative_result.model_dump()]
             return True
+
         specialist_router: dict[str, Callable[[str], bool]] = {
             "TopicStrategist": run_topic,
             "LiteratureCartographer": run_literature,
@@ -148,28 +218,62 @@ class OrchestrationEngine:
         }
 
         for agent_name, task in routes:
+            if review_gate_failed:
+                blocked_event = {
+                    "event": "delegation_blocked_by_review_gate",
+                    "agent": agent_name,
+                    "task": task,
+                }
+                state.timeline.append(blocked_event)
+                self._emit_trace(blocked_event)
+                self._snapshot_state(state, stage=f"blocked_before_{agent_name}")
+                continue
+
             handler = specialist_router.get(agent_name)
             if handler:
                 was_executed = handler(task)
                 if was_executed:
-                    state.timeline.append(
-                        {
-                            "event": "delegation_executed",
-                            "agent": agent_name,
-                            "task": task,
-                        }
-                    )
-            else:
-                state.timeline.append(
-                    {
-                        "event": "unhandled_delegation",
+                    executed_event = {
+                        "event": "delegation_executed",
                         "agent": agent_name,
                         "task": task,
                     }
-                )
+                    state.timeline.append(executed_event)
+                    self._emit_trace(executed_event)
 
-        reviewer_result = self.reviewer.run(task="Review the latest planning artifacts.", state=state)
-        state.review_log.append(reviewer_result.model_dump())
+                    review_passed = self._run_review_gate(state=state, stage=agent_name)
+                    self._snapshot_state(state, stage=agent_name)
+                    if not review_passed:
+                        review_gate_failed = True
+                        fail_event = {
+                            "event": "review_gate_failed",
+                            "stage": agent_name,
+                        }
+                        state.timeline.append(fail_event)
+                        self._emit_trace(fail_event)
+                else:
+                    self._snapshot_state(state, stage=f"skipped_{agent_name}")
+            else:
+                unhandled_event = {
+                    "event": "unhandled_delegation",
+                    "agent": agent_name,
+                    "task": task,
+                }
+                state.timeline.append(unhandled_event)
+                self._emit_trace(unhandled_event)
+                self._snapshot_state(state, stage=f"unhandled_{agent_name}")
+
+        reviewer_result = self.reviewer.run(task="Final review of planning artifacts.", state=state)
+        final_review = reviewer_result.model_dump()
+        final_review["stage"] = "final"
+        state.review_log.append(final_review)
+        final_event = {
+            "event": "final_review_completed",
+            "verdict": reviewer_result.verdict,
+        }
+        state.timeline.append(final_event)
+        self._emit_trace(final_event)
+        self._snapshot_state(state, stage="final")
 
         return OrchestrationResult(
             chief_of_staff=chief_result,
