@@ -18,6 +18,8 @@ class ChiefOfStaff(DeterministicAgent[ChiefOfStaffOutput]):
         has_topic = bool(state.topic_pool)
         has_literature_map = bool(state.reading_board)
         has_project_design = bool(state.project_board)
+        has_supervisor_targets = bool(state.target_supervisors)
+        has_drafts = bool(state.drafts)
         delegations = []
 
         if not has_topic:
@@ -53,14 +55,36 @@ class ChiefOfStaff(DeterministicAgent[ChiefOfStaffOutput]):
                 }
             )
 
+        if not has_supervisor_targets:
+            delegations.append(
+                {
+                    "agent": "SupervisorMapper",
+                    "task": "Rank supervisor/lab targets based on project fit and outreach viability.",
+                    "why_this_agent": "Need evidence-based supervisor targeting after project framing.",
+                    "priority": "low",
+                    "expected_output": "Ranked supervisor targets with segmentation and outreach angles.",
+                }
+            )
+
+        if not has_drafts:
+            delegations.append(
+                {
+                    "agent": "NarrativeWriter",
+                    "task": "Draft personalized outreach email variants grounded in project and supervisor fit.",
+                    "why_this_agent": "Need concise outreach drafts that are specific and evidence-grounded.",
+                    "priority": "low",
+                    "expected_output": "Structured outreach drafts with customization slots.",
+                }
+            )
+
         return {
             "goal_now": "Create a narrow research direction and quality-check it.",
             "assumptions": ["The user goal is still broad and exploratory."],
             "delegations": delegations,
             "merged_plan": {
-                "now": ["Run TopicStrategist", "Run LiteratureCartographer", "Run ProjectArchitect", "Run SkepticalReviewer"],
+                "now": ["Run TopicStrategist", "Run LiteratureCartographer", "Run ProjectArchitect", "Run SupervisorMapper", "Run NarrativeWriter", "Run SkepticalReviewer"],
                 "parallel": [],
-                "later": ["Prepare supervisor targeting and outreach draft"],
+                "later": [],
             },
             "risks": ["Topic may remain too vague without strict criteria."],
             "state_update": {

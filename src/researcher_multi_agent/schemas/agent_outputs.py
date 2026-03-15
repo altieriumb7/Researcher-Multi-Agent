@@ -377,3 +377,154 @@ class ProjectArchitectOutput:
             "major_risks": self.major_risks,
             "fallback_versions": self.fallback_versions,
         }
+
+
+@dataclass
+class SupervisorTarget:
+    name: str
+    institution: str
+    fit_level: str
+    fit_reasons: list[str]
+    relevant_themes_to_mention: list[str]
+    best_outreach_angle: str
+    risks_or_red_flags: list[str]
+    priority: int
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "SupervisorTarget":
+        require_fields(
+            payload,
+            [
+                "name",
+                "institution",
+                "fit_level",
+                "fit_reasons",
+                "relevant_themes_to_mention",
+                "best_outreach_angle",
+                "risks_or_red_flags",
+                "priority",
+            ],
+            "SupervisorTarget",
+        )
+        require_literal(
+            payload["fit_level"],
+            {"primary", "adjacent", "opportunistic"},
+            "SupervisorTarget.fit_level",
+        )
+        return cls(**payload)
+
+    def model_dump(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class SupervisorSegmentation:
+    reach: list[str]
+    strong_fit: list[str]
+    safe_fit: list[str]
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "SupervisorSegmentation":
+        require_fields(payload, ["reach", "strong_fit", "safe_fit"], "SupervisorSegmentation")
+        return cls(**payload)
+
+    def model_dump(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class SupervisorMapperOutput:
+    targets: list[SupervisorTarget]
+    segmentation: SupervisorSegmentation
+
+    @classmethod
+    def model_validate(cls, payload: dict[str, Any]) -> "SupervisorMapperOutput":
+        require_fields(payload, ["targets", "segmentation"], "SupervisorMapperOutput")
+        targets = [SupervisorTarget.from_dict(item) for item in payload["targets"]]
+        if not targets:
+            raise SchemaValidationError("SupervisorMapperOutput requires at least one target")
+
+        priorities = [target.priority for target in targets]
+        if priorities != sorted(priorities):
+            raise SchemaValidationError("SupervisorMapperOutput priorities must be sorted ascending")
+        if len(priorities) != len(set(priorities)):
+            raise SchemaValidationError("SupervisorMapperOutput priorities must be unique")
+
+        target_names = {target.name for target in targets}
+        segmentation = SupervisorSegmentation.from_dict(payload["segmentation"])
+        segmented_names = segmentation.reach + segmentation.strong_fit + segmentation.safe_fit
+        if any(name not in target_names for name in segmented_names):
+            raise SchemaValidationError("SupervisorMapperOutput segmentation includes unknown target name")
+
+        return cls(
+            targets=targets,
+            segmentation=segmentation,
+        )
+
+    def model_dump(self) -> dict[str, Any]:
+        return {
+            "targets": [target.model_dump() for target in self.targets],
+            "segmentation": self.segmentation.model_dump(),
+        }
+
+
+@dataclass
+class NarrativeDraft:
+    version_name: str
+    text: str
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "NarrativeDraft":
+        require_fields(payload, ["version_name", "text"], "NarrativeDraft")
+        return cls(**payload)
+
+    def model_dump(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class NarrativeWriterOutput:
+    document_type: str
+    target_audience: str
+    tone: str
+    drafts: list[NarrativeDraft]
+    customization_slots: list[str]
+    weak_sentences_to_avoid: list[str]
+
+    @classmethod
+    def model_validate(cls, payload: dict[str, Any]) -> "NarrativeWriterOutput":
+        require_fields(
+            payload,
+            [
+                "document_type",
+                "target_audience",
+                "tone",
+                "drafts",
+                "customization_slots",
+                "weak_sentences_to_avoid",
+            ],
+            "NarrativeWriterOutput",
+        )
+        drafts = [NarrativeDraft.from_dict(item) for item in payload["drafts"]]
+        if not drafts:
+            raise SchemaValidationError("NarrativeWriterOutput requires at least one draft")
+        if any(not draft.text.strip() for draft in drafts):
+            raise SchemaValidationError("NarrativeWriterOutput draft text must be non-empty")
+        return cls(
+            document_type=payload["document_type"],
+            target_audience=payload["target_audience"],
+            tone=payload["tone"],
+            drafts=drafts,
+            customization_slots=payload["customization_slots"],
+            weak_sentences_to_avoid=payload["weak_sentences_to_avoid"],
+        )
+
+    def model_dump(self) -> dict[str, Any]:
+        return {
+            "document_type": self.document_type,
+            "target_audience": self.target_audience,
+            "tone": self.tone,
+            "drafts": [draft.model_dump() for draft in self.drafts],
+            "customization_slots": self.customization_slots,
+            "weak_sentences_to_avoid": self.weak_sentences_to_avoid,
+        }

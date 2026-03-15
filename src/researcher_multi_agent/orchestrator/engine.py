@@ -6,14 +6,18 @@ from typing import Callable
 from researcher_multi_agent.agents.chief_of_staff import ChiefOfStaff
 from researcher_multi_agent.agents.literature_cartographer import LiteratureCartographer
 from researcher_multi_agent.agents.project_architect import ProjectArchitect
+from researcher_multi_agent.agents.narrative_writer import NarrativeWriter
 from researcher_multi_agent.agents.skeptical_reviewer import SkepticalReviewer
+from researcher_multi_agent.agents.supervisor_mapper import SupervisorMapper
 from researcher_multi_agent.agents.topic_strategist import TopicStrategist
 from researcher_multi_agent.orchestrator.routing import route_delegations
 from researcher_multi_agent.schemas.agent_outputs import (
     ChiefOfStaffOutput,
     LiteratureCartographerOutput,
     ProjectArchitectOutput,
+    NarrativeWriterOutput,
     SkepticalReviewerOutput,
+    SupervisorMapperOutput,
     TopicStrategistOutput,
 )
 from researcher_multi_agent.schemas.state import GoalProfile, SharedState
@@ -26,6 +30,8 @@ class OrchestrationResult:
     topic_strategist: TopicStrategistOutput | None
     literature_cartographer: LiteratureCartographerOutput | None
     project_architect: ProjectArchitectOutput | None
+    supervisor_mapper: SupervisorMapperOutput | None
+    narrative_writer: NarrativeWriterOutput | None
     skeptical_reviewer: SkepticalReviewerOutput
     state: SharedState
 
@@ -37,6 +43,8 @@ class OrchestrationEngine:
         self.topic = TopicStrategist(loader)
         self.literature = LiteratureCartographer(loader)
         self.project = ProjectArchitect(loader)
+        self.supervisor_mapper = SupervisorMapper(loader)
+        self.narrative_writer = NarrativeWriter(loader)
         self.reviewer = SkepticalReviewer(loader)
 
     def run(self, goal: str, constraints: list[str] | None = None) -> OrchestrationResult:
@@ -48,6 +56,8 @@ class OrchestrationEngine:
         topic_result: TopicStrategistOutput | None = None
         literature_result: LiteratureCartographerOutput | None = None
         project_result: ProjectArchitectOutput | None = None
+        supervisor_result: SupervisorMapperOutput | None = None
+        narrative_result: NarrativeWriterOutput | None = None
 
         def run_topic(task: str) -> bool:
             nonlocal topic_result
@@ -87,11 +97,54 @@ class OrchestrationEngine:
             state.project_board = [project_result.model_dump()]
             return True
 
+
+        def run_supervisor_mapper(task: str) -> bool:
+            nonlocal supervisor_result
+            if not state.project_board:
+                state.timeline.append(
+                    {
+                        "event": "delegation_skipped_missing_dependency",
+                        "agent": "SupervisorMapper",
+                        "task": task,
+                        "requires": "project_board",
+                    }
+                )
+                return False
+            supervisor_result = self.supervisor_mapper.run(task=task, state=state)
+            state.target_supervisors = [supervisor_result.model_dump()]
+            return True
+
+        def run_narrative_writer(task: str) -> bool:
+            nonlocal narrative_result
+            if not state.project_board:
+                state.timeline.append(
+                    {
+                        "event": "delegation_skipped_missing_dependency",
+                        "agent": "NarrativeWriter",
+                        "task": task,
+                        "requires": "project_board",
+                    }
+                )
+                return False
+            if not state.target_supervisors:
+                state.timeline.append(
+                    {
+                        "event": "delegation_skipped_missing_dependency",
+                        "agent": "NarrativeWriter",
+                        "task": task,
+                        "requires": "target_supervisors",
+                    }
+                )
+                return False
+            narrative_result = self.narrative_writer.run(task=task, state=state)
+            state.drafts = [narrative_result.model_dump()]
+            return True
         specialist_router: dict[str, Callable[[str], bool]] = {
             "TopicStrategist": run_topic,
             "LiteratureCartographer": run_literature,
             "ProjectArchitect": run_project,
-            # Milestone 4 agents can be added here without changing control flow.
+            "SupervisorMapper": run_supervisor_mapper,
+            "NarrativeWriter": run_narrative_writer,
         }
 
         for agent_name, task in routes:
@@ -123,6 +176,8 @@ class OrchestrationEngine:
             topic_strategist=topic_result,
             literature_cartographer=literature_result,
             project_architect=project_result,
+            supervisor_mapper=supervisor_result,
+            narrative_writer=narrative_result,
             skeptical_reviewer=reviewer_result,
             state=state,
         )

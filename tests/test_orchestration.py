@@ -2,7 +2,7 @@ from researcher_multi_agent.orchestrator.engine import OrchestrationEngine
 from researcher_multi_agent.schemas.agent_outputs import ChiefOfStaffOutput
 
 
-def test_orchestration_runs_milestone3_path() -> None:
+def test_orchestration_runs_milestone4_path() -> None:
     engine = OrchestrationEngine()
     result = engine.run(goal="Find a strong first PhD project direction in oversight")
 
@@ -10,14 +10,18 @@ def test_orchestration_runs_milestone3_path() -> None:
     assert result.topic_strategist is not None
     assert result.literature_cartographer is not None
     assert result.project_architect is not None
+    assert result.supervisor_mapper is not None
+    assert result.narrative_writer is not None
     assert result.skeptical_reviewer.verdict in {"PASS", "REVISE", "REJECT"}
     assert result.state.topic_pool
     assert result.state.reading_board
     assert result.state.project_board
+    assert result.state.target_supervisors
+    assert result.state.drafts
     assert result.state.review_log
 
     executed = [item["agent"] for item in result.state.timeline if item["event"] == "delegation_executed"]
-    assert executed == ["TopicStrategist", "LiteratureCartographer", "ProjectArchitect"]
+    assert executed == ["TopicStrategist", "LiteratureCartographer", "ProjectArchitect", "SupervisorMapper", "NarrativeWriter"]
 
 
 def test_orchestration_records_unhandled_delegations() -> None:
@@ -49,6 +53,8 @@ def test_orchestration_records_unhandled_delegations() -> None:
     assert result.topic_strategist is None
     assert result.literature_cartographer is None
     assert result.project_architect is None
+    assert result.supervisor_mapper is None
+    assert result.narrative_writer is None
     assert result.state.timeline[0]["event"] == "unhandled_delegation"
 
 
@@ -114,3 +120,100 @@ def test_milestone3_skips_literature_when_topic_missing() -> None:
     assert not result.state.reading_board
     assert result.state.timeline[0]["event"] == "delegation_skipped_missing_dependency"
     assert result.state.timeline[0]["requires"] == "topic_pool"
+
+
+def test_milestone4_skips_supervisor_mapper_when_project_missing() -> None:
+    engine = OrchestrationEngine()
+
+    def fake_chief_run(task: str, state):
+        return ChiefOfStaffOutput.model_validate(
+            {
+                "goal_now": "goal",
+                "assumptions": [],
+                "delegations": [
+                    {
+                        "agent": "SupervisorMapper",
+                        "task": "Rank supervisors",
+                        "why_this_agent": "",
+                        "priority": "high",
+                        "expected_output": "",
+                    }
+                ],
+                "merged_plan": {"now": [], "parallel": [], "later": []},
+                "risks": [],
+                "state_update": {},
+            }
+        )
+
+    engine.chief.run = fake_chief_run  # type: ignore[method-assign]
+    result = engine.run(goal="test")
+
+    assert result.supervisor_mapper is None
+    assert not result.state.target_supervisors
+    assert result.state.timeline[0]["event"] == "delegation_skipped_missing_dependency"
+    assert result.state.timeline[0]["requires"] == "project_board"
+
+
+def test_milestone4_skips_narrative_writer_when_targets_missing() -> None:
+    engine = OrchestrationEngine()
+
+    def fake_chief_run(task: str, state):
+        state.project_board = [{"project_title": "seed"}]
+        return ChiefOfStaffOutput.model_validate(
+            {
+                "goal_now": "goal",
+                "assumptions": [],
+                "delegations": [
+                    {
+                        "agent": "NarrativeWriter",
+                        "task": "Draft outreach",
+                        "why_this_agent": "",
+                        "priority": "high",
+                        "expected_output": "",
+                    }
+                ],
+                "merged_plan": {"now": [], "parallel": [], "later": []},
+                "risks": [],
+                "state_update": {},
+            }
+        )
+
+    engine.chief.run = fake_chief_run  # type: ignore[method-assign]
+    result = engine.run(goal="test")
+
+    assert result.narrative_writer is None
+    assert not result.state.drafts
+    assert result.state.timeline[0]["event"] == "delegation_skipped_missing_dependency"
+    assert result.state.timeline[0]["requires"] == "target_supervisors"
+
+
+def test_milestone4_skips_narrative_writer_when_project_missing() -> None:
+    engine = OrchestrationEngine()
+
+    def fake_chief_run(task: str, state):
+        return ChiefOfStaffOutput.model_validate(
+            {
+                "goal_now": "goal",
+                "assumptions": [],
+                "delegations": [
+                    {
+                        "agent": "NarrativeWriter",
+                        "task": "Draft outreach",
+                        "why_this_agent": "",
+                        "priority": "high",
+                        "expected_output": "",
+                    }
+                ],
+                "merged_plan": {"now": [], "parallel": [], "later": []},
+                "risks": [],
+                "state_update": {},
+            }
+        )
+
+    engine.chief.run = fake_chief_run  # type: ignore[method-assign]
+    result = engine.run(goal="test")
+
+    assert result.narrative_writer is None
+    assert not result.state.drafts
+    assert result.state.timeline[0]["event"] == "delegation_skipped_missing_dependency"
+    assert result.state.timeline[0]["requires"] == "project_board"
