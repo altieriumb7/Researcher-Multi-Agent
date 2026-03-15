@@ -139,7 +139,7 @@ Use OpenAI models and a modular architecture so prompts, schemas, tools, and orc
 
 ### Still missing (outside Milestones 1-2)
 - ✅ Milestone 3: `LiteratureCartographer`, `ProjectArchitect`, related schemas, and orchestrator/state updates implemented.
-- ⏳ Milestone 4: `SupervisorMapper`, `NarrativeWriter`, and output formats.
+- ✅ Milestone 4: `SupervisorMapper`, `NarrativeWriter`, and output formats implemented.
 - ⏳ Milestone 5: full review gates, richer state transitions, tracing hooks.
 - ⏳ Milestone 6: broader validation suite (state transitions, revision loops, additional smoke/integration coverage).
 
@@ -172,4 +172,46 @@ Use OpenAI models and a modular architecture so prompts, schemas, tools, and orc
 - Refined `ChiefOfStaff` delegation rationale text for `LiteratureCartographer` to avoid implying dependencies are already satisfied at planning time.
 - Added explicit orchestration test for `LiteratureCartographer` dependency skip when `topic_pool` is missing.
 - Re-ran full test suite after fixes.
+- Blockers: none.
+
+
+### Latest update (Milestone 4)
+- Added deterministic specialist agents:
+  - `SupervisorMapper`
+  - `NarrativeWriter`
+- Added structured output schemas for:
+  - ranked supervisor targets and segmentation
+  - outreach narrative drafts with customization slots
+- Integrated Milestone 4 agents into the existing manager-led orchestrator via delegation routing with dependency guards:
+  - `SupervisorMapper` requires `project_board`
+  - `NarrativeWriter` requires `project_board` and `target_supervisors`
+- Updated `ChiefOfStaff` delegations/plan to include supervisor targeting and outreach drafting in the active execution chain.
+- Added tests for:
+  - supervisor ranking output ordering
+  - outreach draft generation
+  - full Milestone 4 orchestration chain producing supervisor targets and drafts
+  - schema validation/rejection for new output types
+- Blockers: none.
+
+
+### Follow-up adjustments after Milestone 4 review
+- Strengthened `SupervisorMapperOutput` validation:
+  - priorities must be sorted ascending and unique
+  - segmentation names must reference known targets
+- Strengthened `NarrativeWriterOutput` validation:
+  - draft text must be non-empty (non-whitespace)
+- Tightened orchestration dependency guards:
+  - `NarrativeWriter` now also requires `project_board` in addition to `target_supervisors`
+- Expanded tests to cover:
+  - invalid supervisor priority ordering
+  - unknown names in segmentation
+  - blank outreach draft rejection
+  - narrative-writer dependency skip when project context is missing
+- Blockers: none.
+
+
+### Follow-up adjustments after second Milestone 4 review
+- Added schema test coverage for duplicate supervisor priorities to mirror uniqueness enforcement.
+- Synced Milestone 4 progress notes so dependency requirements for `NarrativeWriter` are consistent across sections.
+- Re-ran full test suite after updates.
 - Blockers: none.

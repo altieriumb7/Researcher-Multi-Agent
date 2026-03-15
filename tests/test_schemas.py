@@ -4,7 +4,9 @@ from researcher_multi_agent.schemas.agent_outputs import (
     ChiefOfStaffOutput,
     LiteratureCartographerOutput,
     ProjectArchitectOutput,
+    NarrativeWriterOutput,
     SkepticalReviewerOutput,
+    SupervisorMapperOutput,
 )
 from researcher_multi_agent.schemas.validation import SchemaValidationError
 
@@ -170,5 +172,158 @@ def test_project_architect_schema_rejects_missing_nested_fields() -> None:
                 },
                 "major_risks": ["risk"],
                 "fallback_versions": ["fallback"],
+            }
+        )
+
+
+def test_supervisor_mapper_schema_validation_passes() -> None:
+    parsed = SupervisorMapperOutput.model_validate(
+        {
+            "targets": [
+                {
+                    "name": "Prof A",
+                    "institution": "Uni",
+                    "fit_level": "primary",
+                    "fit_reasons": ["topic fit"],
+                    "relevant_themes_to_mention": ["reasoning oversight"],
+                    "best_outreach_angle": "first project scope",
+                    "risks_or_red_flags": ["competitive intake"],
+                    "priority": 1,
+                }
+            ],
+            "segmentation": {"reach": [], "strong_fit": ["Prof A"], "safe_fit": []},
+        }
+    )
+    assert parsed.targets[0].fit_level == "primary"
+
+
+def test_supervisor_mapper_schema_rejects_invalid_fit_level() -> None:
+    with pytest.raises(SchemaValidationError):
+        SupervisorMapperOutput.model_validate(
+            {
+                "targets": [
+                    {
+                        "name": "Prof A",
+                        "institution": "Uni",
+                        "fit_level": "elite",
+                        "fit_reasons": ["topic fit"],
+                        "relevant_themes_to_mention": ["reasoning oversight"],
+                        "best_outreach_angle": "first project scope",
+                        "risks_or_red_flags": ["competitive intake"],
+                        "priority": 1,
+                    }
+                ],
+                "segmentation": {"reach": [], "strong_fit": ["Prof A"], "safe_fit": []},
+            }
+        )
+
+
+def test_narrative_writer_schema_requires_drafts() -> None:
+    with pytest.raises(SchemaValidationError):
+        NarrativeWriterOutput.model_validate(
+            {
+                "document_type": "supervisor_outreach_email",
+                "target_audience": "Prof A",
+                "tone": "concise",
+                "drafts": [],
+                "customization_slots": [],
+                "weak_sentences_to_avoid": [],
+            }
+        )
+
+
+def test_supervisor_mapper_schema_rejects_unsorted_priorities() -> None:
+    with pytest.raises(SchemaValidationError):
+        SupervisorMapperOutput.model_validate(
+            {
+                "targets": [
+                    {
+                        "name": "Prof A",
+                        "institution": "Uni",
+                        "fit_level": "primary",
+                        "fit_reasons": ["topic fit"],
+                        "relevant_themes_to_mention": ["reasoning oversight"],
+                        "best_outreach_angle": "first project scope",
+                        "risks_or_red_flags": ["competitive intake"],
+                        "priority": 2,
+                    },
+                    {
+                        "name": "Prof B",
+                        "institution": "Uni",
+                        "fit_level": "adjacent",
+                        "fit_reasons": ["method fit"],
+                        "relevant_themes_to_mention": ["evaluation"],
+                        "best_outreach_angle": "adjacent scope",
+                        "risks_or_red_flags": [],
+                        "priority": 1,
+                    },
+                ],
+                "segmentation": {"reach": [], "strong_fit": ["Prof A"], "safe_fit": ["Prof B"]},
+            }
+        )
+
+
+def test_supervisor_mapper_schema_rejects_unknown_segmentation_name() -> None:
+    with pytest.raises(SchemaValidationError):
+        SupervisorMapperOutput.model_validate(
+            {
+                "targets": [
+                    {
+                        "name": "Prof A",
+                        "institution": "Uni",
+                        "fit_level": "primary",
+                        "fit_reasons": ["topic fit"],
+                        "relevant_themes_to_mention": ["reasoning oversight"],
+                        "best_outreach_angle": "first project scope",
+                        "risks_or_red_flags": ["competitive intake"],
+                        "priority": 1,
+                    }
+                ],
+                "segmentation": {"reach": ["Prof Z"], "strong_fit": ["Prof A"], "safe_fit": []},
+            }
+        )
+
+
+def test_narrative_writer_schema_rejects_blank_draft_text() -> None:
+    with pytest.raises(SchemaValidationError):
+        NarrativeWriterOutput.model_validate(
+            {
+                "document_type": "supervisor_outreach_email",
+                "target_audience": "Prof A",
+                "tone": "concise",
+                "drafts": [{"version_name": "v1", "text": "   "}],
+                "customization_slots": [],
+                "weak_sentences_to_avoid": [],
+            }
+        )
+
+
+def test_supervisor_mapper_schema_rejects_duplicate_priorities() -> None:
+    with pytest.raises(SchemaValidationError):
+        SupervisorMapperOutput.model_validate(
+            {
+                "targets": [
+                    {
+                        "name": "Prof A",
+                        "institution": "Uni",
+                        "fit_level": "primary",
+                        "fit_reasons": ["topic fit"],
+                        "relevant_themes_to_mention": ["reasoning oversight"],
+                        "best_outreach_angle": "first project scope",
+                        "risks_or_red_flags": ["competitive intake"],
+                        "priority": 1,
+                    },
+                    {
+                        "name": "Prof B",
+                        "institution": "Uni",
+                        "fit_level": "adjacent",
+                        "fit_reasons": ["method fit"],
+                        "relevant_themes_to_mention": ["evaluation"],
+                        "best_outreach_angle": "adjacent scope",
+                        "risks_or_red_flags": [],
+                        "priority": 1,
+                    },
+                ],
+                "segmentation": {"reach": [], "strong_fit": ["Prof A"], "safe_fit": ["Prof B"]},
             }
         )
