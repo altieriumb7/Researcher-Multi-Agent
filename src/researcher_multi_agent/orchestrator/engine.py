@@ -230,30 +230,7 @@ class OrchestrationEngine:
                 continue
 
             handler = specialist_router.get(agent_name)
-            if handler:
-                was_executed = handler(task)
-                if was_executed:
-                    executed_event = {
-                        "event": "delegation_executed",
-                        "agent": agent_name,
-                        "task": task,
-                    }
-                    state.timeline.append(executed_event)
-                    self._emit_trace(executed_event)
-
-                    review_passed = self._run_review_gate(state=state, stage=agent_name)
-                    self._snapshot_state(state, stage=agent_name)
-                    if not review_passed:
-                        review_gate_failed = True
-                        fail_event = {
-                            "event": "review_gate_failed",
-                            "stage": agent_name,
-                        }
-                        state.timeline.append(fail_event)
-                        self._emit_trace(fail_event)
-                else:
-                    self._snapshot_state(state, stage=f"skipped_{agent_name}")
-            else:
+            if handler is None:
                 unhandled_event = {
                     "event": "unhandled_delegation",
                     "agent": agent_name,
@@ -262,6 +239,44 @@ class OrchestrationEngine:
                 state.timeline.append(unhandled_event)
                 self._emit_trace(unhandled_event)
                 self._snapshot_state(state, stage=f"unhandled_{agent_name}")
+                continue
+
+            try:
+                was_executed = handler(task)
+            except Exception as exc:
+                failure_event = {
+                    "event": "delegation_failed",
+                    "agent": agent_name,
+                    "task": task,
+                    "error": f"{type(exc).__name__}: {exc}",
+                }
+                state.timeline.append(failure_event)
+                self._emit_trace(failure_event)
+                review_gate_failed = True
+                self._snapshot_state(state, stage=f"failed_{agent_name}")
+                continue
+
+            if was_executed:
+                executed_event = {
+                    "event": "delegation_executed",
+                    "agent": agent_name,
+                    "task": task,
+                }
+                state.timeline.append(executed_event)
+                self._emit_trace(executed_event)
+
+                review_passed = self._run_review_gate(state=state, stage=agent_name)
+                self._snapshot_state(state, stage=agent_name)
+                if not review_passed:
+                    review_gate_failed = True
+                    fail_event = {
+                        "event": "review_gate_failed",
+                        "stage": agent_name,
+                    }
+                    state.timeline.append(fail_event)
+                    self._emit_trace(fail_event)
+            else:
+                self._snapshot_state(state, stage=f"skipped_{agent_name}")
 
         reviewer_result = self.reviewer.run(task="Final review of planning artifacts.", state=state)
         final_review = reviewer_result.model_dump()

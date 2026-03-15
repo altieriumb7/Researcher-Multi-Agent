@@ -7,6 +7,7 @@ from researcher_multi_agent.schemas.agent_outputs import (
     NarrativeWriterOutput,
     SkepticalReviewerOutput,
     SupervisorMapperOutput,
+    TopicStrategistOutput,
 )
 from researcher_multi_agent.schemas.validation import SchemaValidationError
 
@@ -325,5 +326,39 @@ def test_supervisor_mapper_schema_rejects_duplicate_priorities() -> None:
                     },
                 ],
                 "segmentation": {"reach": [], "strong_fit": ["Prof A"], "safe_fit": ["Prof B"]},
+            }
+        )
+
+
+
+def test_topic_strategist_schema_validation_passes() -> None:
+    parsed = TopicStrategistOutput.model_validate(
+        {
+            "candidate_directions": [
+                {
+                    "name": "Direction A",
+                    "problem_statement": "Problem",
+                    "core_hypothesis": "Hypothesis",
+                    "scorecard": {"tractability": 4},
+                    "why_promising": ["signal"],
+                    "why_risky": ["risk"],
+                    "kill_criteria": ["stop"],
+                    "first_paper_angle": "angle",
+                }
+            ],
+            "recommended_focus": ["Direction A"],
+            "decisive_next_questions": ["Question"],
+        }
+    )
+    assert parsed.candidate_directions[0].name == "Direction A"
+
+
+def test_topic_strategist_schema_rejects_empty_candidate_directions() -> None:
+    with pytest.raises(SchemaValidationError):
+        TopicStrategistOutput.model_validate(
+            {
+                "candidate_directions": [],
+                "recommended_focus": ["Direction A"],
+                "decisive_next_questions": ["Question"],
             }
         )

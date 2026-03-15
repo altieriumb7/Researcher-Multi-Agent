@@ -348,3 +348,31 @@ def test_orchestration_applies_chief_list_state_updates() -> None:
     assert result.state.topic_pool == [{"seed": "topic"}]
     assert result.state.timeline[0] == {"event": "seeded_by_chief"}
 
+
+
+def test_orchestration_records_specialist_failure_and_blocks_following() -> None:
+    engine = OrchestrationEngine()
+
+    def failing_topic_run(task: str, state):
+        raise RuntimeError("synthetic topic failure")
+
+    engine.topic.run = failing_topic_run  # type: ignore[method-assign]
+
+    result = engine.run(goal="test specialist failure")
+
+    failure_events = [item for item in result.state.timeline if item["event"] == "delegation_failed"]
+    assert len(failure_events) == 1
+    assert failure_events[0]["agent"] == "TopicStrategist"
+    assert "RuntimeError: synthetic topic failure" in failure_events[0]["error"]
+
+    blocked_events = [item for item in result.state.timeline if item["event"] == "delegation_blocked_by_review_gate"]
+    assert blocked_events
+    assert {event["agent"] for event in blocked_events} == {
+        "LiteratureCartographer",
+        "ProjectArchitect",
+        "SupervisorMapper",
+        "NarrativeWriter",
+    }
+
+    assert result.skeptical_reviewer is not None
+    assert result.state.review_log[-1]["stage"] == "final"
