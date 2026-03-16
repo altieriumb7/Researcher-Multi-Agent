@@ -49,13 +49,16 @@ Then open the printed local Gradio URL in your browser.
 
 1. Create a new Space and choose **Gradio** as the SDK.
 2. Push this repository contents to the Space repo.
-3. In Space **Settings → Variables and secrets**, add:
+3. (Recommended) In Space **Settings → Variables and secrets**, add:
    - Secret name: `OPENAI_API_KEY`
    - Secret value: your OpenAI API key
 4. Rebuild/restart the Space.
 
-## Required environment variables
+## API key configuration
 
-- `OPENAI_API_KEY` (required): API key used by the app runtime.
+You can now provide the API key in either place:
 
-If `OPENAI_API_KEY` is missing, the UI fails gracefully with a clear error message instead of crashing.
+- **Space Secret / environment variable**: `OPENAI_API_KEY`
+- **Runtime UI field**: `OPENAI_API_KEY (runtime, optional)` in the app interface
+
+If both are provided, the runtime field value is used for that app process. If neither is provided, the UI fails gracefully with a clear error message instead of crashing.

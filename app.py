@@ -117,13 +117,22 @@ def serialize_result(result: Any) -> dict[str, Any]:
     }
 
 
-def run_system(goal: str, raw_constraints: str, progress: gr.Progress = gr.Progress()):
+def run_system(
+    goal: str,
+    raw_constraints: str,
+    runtime_api_key: str,
+    progress: gr.Progress = gr.Progress(),
+):
     if not goal or not goal.strip():
         raise gr.Error("Please enter a goal before running the multi-agent system.")
 
+    if runtime_api_key and runtime_api_key.strip():
+        os.environ["OPENAI_API_KEY"] = runtime_api_key.strip()
+
     if not os.getenv("OPENAI_API_KEY"):
         raise gr.Error(
-            "OPENAI_API_KEY is not set. Add it in your environment (or Hugging Face Space Secrets) and try again."
+            "OPENAI_API_KEY is not set. Provide it in the runtime field or add it in your environment "
+            "(or Hugging Face Space Secrets) and try again."
         )
 
     constraints = parse_constraints(raw_constraints)
@@ -147,8 +156,8 @@ def run_system(goal: str, raw_constraints: str, progress: gr.Progress = gr.Progr
         raise gr.Error(f"The orchestration engine failed: {type(exc).__name__}: {exc}") from exc
 
 
-def clear_all() -> tuple[str, str, str, str, str, dict[str, Any] | None]:
-    return "", "", "", "", "", None
+def clear_all() -> tuple[str, str, str, str, str, str, dict[str, Any] | None]:
+    return "", "", "", "", "", "", None
 
 
 def build_app() -> gr.Blocks:
@@ -171,6 +180,13 @@ def build_app() -> gr.Blocks:
             placeholder="One per line or comma-separated (e.g., no wet lab, finish in 8 weeks, low compute budget)",
         )
 
+        runtime_api_key_input = gr.Textbox(
+            label="OPENAI_API_KEY (runtime, optional)",
+            type="password",
+            placeholder="sk-...",
+            info="Leave empty to use OPENAI_API_KEY from Space Secrets/environment.",
+        )
+
         with gr.Row():
             run_button = gr.Button("Run", variant="primary")
             clear_button = gr.Button("Clear")
@@ -185,13 +201,21 @@ def build_app() -> gr.Blocks:
 
         run_button.click(
             fn=run_system,
-            inputs=[goal_input, constraints_input],
+            inputs=[goal_input, constraints_input, runtime_api_key_input],
             outputs=[status_output, summary_output, timeline_output, reviewer_output, raw_output],
         )
         clear_button.click(
             fn=clear_all,
             inputs=None,
-            outputs=[goal_input, constraints_input, status_output, summary_output, timeline_output, reviewer_output],
+            outputs=[
+                goal_input,
+                constraints_input,
+                runtime_api_key_input,
+                status_output,
+                summary_output,
+                timeline_output,
+                reviewer_output,
+            ],
         ).then(
             fn=lambda: None,
             inputs=None,
