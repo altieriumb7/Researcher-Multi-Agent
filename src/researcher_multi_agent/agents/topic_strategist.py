@@ -1,4 +1,5 @@
 import json
+from collections import Counter
 
 from researcher_multi_agent.agents.llm_base import LLMAgent
 from typing import Any
@@ -9,6 +10,7 @@ from researcher_multi_agent.utils.prompt_loader import PromptLoader
 
 class TopicStrategist(LLMAgent[TopicStrategistOutput]):
     name = "TopicStrategist"
+    BRANCH_SAMPLES = 3
 
     def __init__(self, prompt_loader: PromptLoader, llm_client: Any | None = None) -> None:
         self._fallback_mode = llm_client is None
@@ -50,7 +52,7 @@ class TopicStrategist(LLMAgent[TopicStrategistOutput]):
 
     def run(self, task: str, state: SharedState) -> TopicStrategistOutput:
         if self._fallback_mode:
-            payload = {
+            base_payload = {
                 "candidate_directions": [
                     {
                         "name": "Compute-bounded oversight probes for reasoning models",
@@ -67,5 +69,41 @@ class TopicStrategist(LLMAgent[TopicStrategistOutput]):
                 "decisive_next_questions": ["Which publicly available reasoning traces are rich enough for supervision?", "What failure definition is stable across tasks?"],
                 "evidence": [{"claim": "Reasoning traces enable failure prediction", "source": "shared_state.goal_profile + task", "confidence": "medium"}],
             }
-            return self.output_model.model_validate(payload)
-        return super().run(task=task, state=state)
+            alternatives = [base_payload for _ in range(self.BRANCH_SAMPLES)]
+        else:
+            alternatives = []
+            for sample_idx in range(1, self.BRANCH_SAMPLES + 1):
+                user_prompt = (
+                    f"{self.build_user_prompt(task=task, state=state)}\n\n"
+                    "You are in bounded branching mode for MAP exploration. "
+                    f"Return an intentionally distinct candidate set for sample {sample_idx}/{self.BRANCH_SAMPLES}."
+                )
+                result = self.llm_client.call_json_schema(system=self.prompt, user=user_prompt, json_schema=self.output_schema)
+                alternatives.append(result.parsed_json)
+
+        best = max(alternatives, key=self._selection_score)
+        best["evidence"] = [*best.get("evidence", []), self._agreement_signal(alternatives)]
+        return self.output_model.model_validate(best)
+
+    def _selection_score(self, payload: dict[str, Any]) -> int:
+        total_direction_score = sum(sum(direction.get("scorecard", {}).values()) for direction in payload.get("candidate_directions", []))
+        breadth_bonus = len(payload.get("candidate_directions", [])) + len(payload.get("decisive_next_questions", []))
+        return total_direction_score + breadth_bonus
+
+    def _agreement_signal(self, alternatives: list[dict[str, Any]]) -> dict[str, str]:
+        focus_counter = Counter(
+            focus.strip().lower() for payload in alternatives for focus in payload.get("recommended_focus", []) if focus.strip()
+        )
+        if not focus_counter:
+            return {
+                "claim": "Self-consistency agreement across branching samples was unavailable.",
+                "source": f"{self.BRANCH_SAMPLES} branching samples",
+                "confidence": "low",
+            }
+
+        best_focus, best_votes = focus_counter.most_common(1)[0]
+        return {
+            "claim": f"Self-consistency signal: '{best_focus}' appeared in {best_votes}/{len(alternatives)} branching samples.",
+            "source": f"{len(alternatives)} bounded branching samples with selector rubric: scorecard strength + question coverage",
+            "confidence": "high" if best_votes >= (len(alternatives) - 1) else "medium",
+        }
