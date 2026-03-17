@@ -2,6 +2,7 @@ import pytest
 
 from researcher_multi_agent.schemas.agent_outputs import (
     ChiefOfStaffOutput,
+    GoalIntentOutput,
     LiteratureCartographerOutput,
     ProjectArchitectOutput,
     NarrativeWriterOutput,
@@ -360,5 +361,30 @@ def test_topic_strategist_schema_rejects_empty_candidate_directions() -> None:
                 "candidate_directions": [],
                 "recommended_focus": ["Direction A"],
                 "decisive_next_questions": ["Question"],
+            }
+        )
+
+
+def test_goal_intent_schema_validation_passes() -> None:
+    parsed = GoalIntentOutput.model_validate(
+        {
+            "mode": "MAP",
+            "deliverables": {"must_include": ["x"], "nice_to_have": ["y"]},
+            "success_criteria": ["criterion"],
+            "questions_to_user_optional": ["question"],
+            "assumptions": ["assumption"],
+        }
+    )
+    assert parsed.mode == "MAP"
+
+
+def test_goal_intent_schema_rejects_invalid_mode() -> None:
+    with pytest.raises(SchemaValidationError):
+        GoalIntentOutput.model_validate(
+            {
+                "mode": "BROAD",
+                "deliverables": {"must_include": ["x"], "nice_to_have": ["y"]},
+                "success_criteria": ["criterion"],
+                "assumptions": [],
             }
         )

@@ -33,6 +33,53 @@ class Delegation:
 
 
 @dataclass
+class GoalDeliverables:
+    must_include: list[str]
+    nice_to_have: list[str]
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "GoalDeliverables":
+        require_fields(payload, ["must_include", "nice_to_have"], "GoalDeliverables")
+        return cls(**payload)
+
+    def model_dump(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class GoalIntentOutput:
+    mode: str
+    deliverables: GoalDeliverables
+    success_criteria: list[str]
+    questions_to_user_optional: list[str] = field(default_factory=list)
+    assumptions: list[str] = field(default_factory=list)
+
+    @classmethod
+    def model_validate(cls, payload: dict[str, Any]) -> "GoalIntentOutput":
+        require_fields(payload, ["mode", "deliverables", "success_criteria", "assumptions"], "GoalIntentOutput")
+        require_literal(payload["mode"], {"MAP", "NARROW"}, "GoalIntentOutput.mode")
+        questions = payload.get("questions_to_user_optional", [])
+        if not isinstance(questions, list):
+            raise SchemaValidationError("GoalIntentOutput.questions_to_user_optional must be a list")
+        return cls(
+            mode=payload["mode"],
+            deliverables=GoalDeliverables.from_dict(payload["deliverables"]),
+            success_criteria=payload["success_criteria"],
+            questions_to_user_optional=questions,
+            assumptions=payload["assumptions"],
+        )
+
+    def model_dump(self) -> dict[str, Any]:
+        return {
+            "mode": self.mode,
+            "deliverables": self.deliverables.model_dump(),
+            "success_criteria": self.success_criteria,
+            "questions_to_user_optional": self.questions_to_user_optional,
+            "assumptions": self.assumptions,
+        }
+
+
+@dataclass
 class MergedPlan:
     now: list[str]
     parallel: list[str]

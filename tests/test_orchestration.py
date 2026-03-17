@@ -74,7 +74,7 @@ def test_orchestration_records_unhandled_delegations() -> None:
     assert result.project_architect is None
     assert result.supervisor_mapper is None
     assert result.narrative_writer is None
-    assert result.state.timeline[0]["event"] == "unhandled_delegation"
+    assert any(item["event"] == "unhandled_delegation" for item in result.state.timeline)
 
 
 def test_review_gate_blocks_following_stages_when_rejected() -> None:
@@ -150,8 +150,8 @@ def test_milestone3_skips_project_when_literature_missing() -> None:
 
     assert result.project_architect is None
     assert not result.state.project_board
-    assert result.state.timeline[0]["event"] == "delegation_skipped_missing_dependency"
-    assert result.state.timeline[0]["requires"] == "reading_board"
+    skip_event = next(item for item in result.state.timeline if item["event"] == "delegation_skipped_missing_dependency")
+    assert skip_event["requires"] == "reading_board"
 
 
 def test_milestone3_skips_literature_when_topic_missing() -> None:
@@ -182,8 +182,8 @@ def test_milestone3_skips_literature_when_topic_missing() -> None:
 
     assert result.literature_cartographer is None
     assert not result.state.reading_board
-    assert result.state.timeline[0]["event"] == "delegation_skipped_missing_dependency"
-    assert result.state.timeline[0]["requires"] == "topic_pool"
+    skip_event = next(item for item in result.state.timeline if item["event"] == "delegation_skipped_missing_dependency")
+    assert skip_event["requires"] == "topic_pool"
 
 
 def test_milestone4_skips_supervisor_mapper_when_project_missing() -> None:
@@ -214,8 +214,8 @@ def test_milestone4_skips_supervisor_mapper_when_project_missing() -> None:
 
     assert result.supervisor_mapper is None
     assert not result.state.target_supervisors
-    assert result.state.timeline[0]["event"] == "delegation_skipped_missing_dependency"
-    assert result.state.timeline[0]["requires"] == "project_board"
+    skip_event = next(item for item in result.state.timeline if item["event"] == "delegation_skipped_missing_dependency")
+    assert skip_event["requires"] == "project_board"
 
 
 def test_milestone4_skips_narrative_writer_when_targets_missing() -> None:
@@ -247,8 +247,8 @@ def test_milestone4_skips_narrative_writer_when_targets_missing() -> None:
 
     assert result.narrative_writer is None
     assert not result.state.drafts
-    assert result.state.timeline[0]["event"] == "delegation_skipped_missing_dependency"
-    assert result.state.timeline[0]["requires"] == "target_supervisors"
+    skip_event = next(item for item in result.state.timeline if item["event"] == "delegation_skipped_missing_dependency")
+    assert skip_event["requires"] == "target_supervisors"
 
 
 def test_milestone4_skips_narrative_writer_when_project_missing() -> None:
@@ -279,8 +279,8 @@ def test_milestone4_skips_narrative_writer_when_project_missing() -> None:
 
     assert result.narrative_writer is None
     assert not result.state.drafts
-    assert result.state.timeline[0]["event"] == "delegation_skipped_missing_dependency"
-    assert result.state.timeline[0]["requires"] == "project_board"
+    skip_event = next(item for item in result.state.timeline if item["event"] == "delegation_skipped_missing_dependency")
+    assert skip_event["requires"] == "project_board"
 
 
 def test_orchestration_emits_trace_hook_events() -> None:
@@ -346,7 +346,7 @@ def test_orchestration_applies_chief_list_state_updates() -> None:
     result = engine.run(goal="original goal")
 
     assert result.state.topic_pool == [{"seed": "topic"}]
-    assert result.state.timeline[0] == {"event": "seeded_by_chief"}
+    assert result.state.timeline == [{"event": "seeded_by_chief"}, {"event": "final_review_completed", "verdict": result.skeptical_reviewer.verdict}]
 
 
 
@@ -442,3 +442,30 @@ def test_orchestration_rejects_non_dict_chief_list_updates() -> None:
     assert len(rejection_events) == 1
     assert rejection_events[0]["field"] == "timeline"
     assert rejection_events[0]["reason"] == "expected_list_of_dict"
+
+
+def test_orchestration_routes_goal_mode_into_chief_task() -> None:
+    engine = OrchestrationEngine()
+    captured_task: dict[str, str] = {}
+
+    def fake_chief_run(task: str, state):
+        captured_task["task"] = task
+        return ChiefOfStaffOutput.model_validate(
+            {
+                "goal_now": "goal",
+                "assumptions": [],
+                "delegations": [],
+                "merged_plan": {"now": [], "parallel": [], "later": []},
+                "risks": [],
+                "state_update": {},
+            }
+        )
+
+    engine.chief.run = fake_chief_run  # type: ignore[method-assign]
+
+    result = engine.run(goal="Which company and universities are treating this topic as hot topics?")
+
+    assert result.goal_intent.mode == "MAP"
+    assert "Mode: MAP" in captured_task["task"]
+    assert "Deliverables contract must_include" in captured_task["task"]
+    assert any(item["event"] == "goal_interpreted" for item in result.state.timeline)
