@@ -97,7 +97,7 @@ def test_prompt_loader_raises_for_missing_prompt(tmp_path: Path) -> None:
         loader.load("does_not_exist")
 
 
-def test_review_revise_blocks_following_stages() -> None:
+def test_review_revise_triggers_stage_retry() -> None:
     engine = OrchestrationEngine()
 
     def fake_reviewer_run(task: str, state):
@@ -123,15 +123,15 @@ def test_review_revise_blocks_following_stages() -> None:
             }
         )
 
-    engine.reviewer.run = fake_reviewer_run  # type: ignore[method-assign]
+    engine.reviewer.review = lambda stage, state, contract, mode: fake_reviewer_run(f"Review gate for {stage}.", state)  # type: ignore[method-assign]
 
     result = engine.run(goal="test revise loop")
 
     executed = [item["agent"] for item in result.state.timeline if item["event"] == "delegation_executed"]
-    blocked = [item["agent"] for item in result.state.timeline if item["event"] == "delegation_blocked_by_review_gate"]
+    revisions = [item for item in result.state.timeline if item["event"] == "delegation_revision_requested"]
 
-    assert executed == ["TopicStrategist", "LiteratureCartographer"]
-    assert blocked == ["ProjectArchitect", "SupervisorMapper", "NarrativeWriter"]
+    assert executed.count("LiteratureCartographer") == 2
+    assert revisions
 
 
 def test_orchestration_surfaces_chief_schema_failure() -> None:

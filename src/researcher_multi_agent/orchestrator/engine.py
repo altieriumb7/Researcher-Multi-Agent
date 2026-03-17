@@ -15,6 +15,7 @@ from researcher_multi_agent.agents.topic_strategist import TopicStrategist
 from researcher_multi_agent.orchestrator.routing import route_delegations
 from researcher_multi_agent.schemas.agent_outputs import (
     ChiefOfStaffOutput,
+    GoalDeliverables,
     GoalIntentOutput,
     LiteratureCartographerOutput,
     ProjectArchitectOutput,
@@ -28,6 +29,7 @@ from researcher_multi_agent.utils.prompt_loader import PromptLoader
 
 logger = logging.getLogger(__name__)
 MAX_DELEGATIONS_PER_RUN = 12
+MAX_STAGE_ATTEMPTS = 2
 
 
 @dataclass
@@ -79,8 +81,14 @@ class OrchestrationEngine:
         state.state_snapshots.append(snapshot)
         self._emit_trace({"event": "state_snapshot", **snapshot})
 
-    def _run_review_gate(self, state: SharedState, stage: str) -> bool:
-        review = self.reviewer.run(task=f"Review gate for {stage}.", state=state)
+    def _run_review_gate(
+        self,
+        state: SharedState,
+        stage: str,
+        contract: GoalDeliverables,
+        mode: str,
+    ) -> SkepticalReviewerOutput:
+        review = self.reviewer.review(stage=stage, state=state, contract=contract, mode=mode)
         review_payload = review.model_dump()
         review_payload["stage"] = stage
         state.review_log.append(review_payload)
@@ -93,7 +101,7 @@ class OrchestrationEngine:
         state.timeline.append(gate_event)
         self._emit_trace(gate_event)
 
-        return review.verdict == "PASS"
+        return review
 
     def _apply_chief_state_update(self, state: SharedState, chief_result: ChiefOfStaffOutput) -> None:
         state_update = chief_result.state_update
@@ -175,7 +183,6 @@ class OrchestrationEngine:
         project_result: ProjectArchitectOutput | None = None
         supervisor_result: SupervisorMapperOutput | None = None
         narrative_result: NarrativeWriterOutput | None = None
-        review_gate_failed = False
 
         def run_topic(task: str) -> bool:
             nonlocal topic_result
@@ -265,17 +272,12 @@ class OrchestrationEngine:
             "NarrativeWriter": run_narrative_writer,
         }
 
-        for agent_name, task in routes:
-            if review_gate_failed:
-                blocked_event = {
-                    "event": "delegation_blocked_by_review_gate",
-                    "agent": agent_name,
-                    "task": task,
-                }
-                state.timeline.append(blocked_event)
-                self._emit_trace(blocked_event)
-                self._snapshot_state(state, stage=f"blocked_before_{agent_name}")
-                continue
+        delegation_attempts = 0
+        route_index = 0
+        while route_index < len(routes) and delegation_attempts < MAX_DELEGATIONS_PER_RUN:
+            agent_name, task = routes[route_index]
+            route_index += 1
+            delegation_attempts += 1
 
             handler = specialist_router.get(agent_name)
             if handler is None:
@@ -289,44 +291,90 @@ class OrchestrationEngine:
                 self._snapshot_state(state, stage=f"unhandled_{agent_name}")
                 continue
 
-            try:
-                was_executed = handler(task)
-            except Exception as exc:
-                failure_event = {
-                    "event": "delegation_failed",
-                    "agent": agent_name,
-                    "task": task,
-                    "error": f"{type(exc).__name__}: {exc}",
-                }
-                state.timeline.append(failure_event)
-                self._emit_trace(failure_event)
-                review_gate_failed = True
-                self._snapshot_state(state, stage=f"failed_{agent_name}")
-                continue
+            attempts = 0
+            while attempts < MAX_STAGE_ATTEMPTS:
+                try:
+                    was_executed = handler(task)
+                except Exception as exc:
+                    failure_event = {
+                        "event": "delegation_failed",
+                        "agent": agent_name,
+                        "task": task,
+                        "error": f"{type(exc).__name__}: {exc}",
+                    }
+                    state.timeline.append(failure_event)
+                    self._emit_trace(failure_event)
+                    self._snapshot_state(state, stage=f"failed_{agent_name}")
+                    break
 
-            if was_executed:
+                if not was_executed:
+                    self._snapshot_state(state, stage=f"skipped_{agent_name}")
+                    break
+
                 executed_event = {
                     "event": "delegation_executed",
                     "agent": agent_name,
                     "task": task,
+                    "attempt": attempts + 1,
                 }
                 state.timeline.append(executed_event)
                 self._emit_trace(executed_event)
 
-                review_passed = self._run_review_gate(state=state, stage=agent_name)
+                review = self._run_review_gate(
+                    state=state,
+                    stage=agent_name,
+                    contract=goal_intent.deliverables,
+                    mode=goal_intent.mode,
+                )
                 self._snapshot_state(state, stage=agent_name)
-                if not review_passed:
-                    review_gate_failed = True
-                    fail_event = {
-                        "event": "review_gate_failed",
+
+                if review.verdict == "PASS":
+                    break
+
+                if review.verdict == "REVISE":
+                    attempts += 1
+                    revision_task = " ".join(review.revision_instructions) if review.revision_instructions else "Address reviewer issues."
+                    task = f"REVISION REQUIRED. Apply: {revision_task}. Original task: {task}"
+                    revise_event = {
+                        "event": "delegation_revision_requested",
+                        "agent": agent_name,
+                        "attempt": attempts,
+                    }
+                    state.timeline.append(revise_event)
+                    self._emit_trace(revise_event)
+                    continue
+
+                if review.verdict == "REJECT":
+                    reject_event = {
+                        "event": "review_gate_rejected",
                         "stage": agent_name,
                     }
-                    state.timeline.append(fail_event)
-                    self._emit_trace(fail_event)
-            else:
-                self._snapshot_state(state, stage=f"skipped_{agent_name}")
+                    state.timeline.append(reject_event)
+                    self._emit_trace(reject_event)
+                    chief_result = self.chief.run(task=planning_task, state=state)
+                    self._apply_chief_state_update(state=state, chief_result=chief_result)
+                    routes = route_delegations(chief_result)
+                    if len(routes) > MAX_DELEGATIONS_PER_RUN:
+                        routes = routes[:MAX_DELEGATIONS_PER_RUN]
+                    route_index = 0
+                    replanned_event = {
+                        "event": "delegations_replanned",
+                        "delegations": len(routes),
+                    }
+                    state.timeline.append(replanned_event)
+                    self._emit_trace(replanned_event)
+                    break
 
-        reviewer_result = self.reviewer.run(task="Final review of planning artifacts.", state=state)
+            if attempts >= MAX_STAGE_ATTEMPTS:
+                exhausted_event = {
+                    "event": "stage_attempts_exhausted",
+                    "agent": agent_name,
+                    "max_attempts": MAX_STAGE_ATTEMPTS,
+                }
+                state.timeline.append(exhausted_event)
+                self._emit_trace(exhausted_event)
+
+        reviewer_result = self.reviewer.review(stage="final", state=state, contract=goal_intent.deliverables, mode=goal_intent.mode)
         final_review = reviewer_result.model_dump()
         final_review["stage"] = "final"
         state.review_log.append(final_review)
