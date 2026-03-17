@@ -325,3 +325,10 @@ Use OpenAI models and a modular architecture so prompts, schemas, tools, and orc
   - fixed clear flow to reset both inputs and outputs (including raw JSON)
 - Kept manager-led backend orchestration unchanged; UI still calls `OrchestrationEngine` directly.
 - Expanded README deployment instructions with explicit Hugging Face Space setup + required secret.
+
+### Follow-up update: Patch 1 (LLM runtime + structured outputs)
+- Added OpenAI-backed LLM runtime client (`LLMClient`) with strict JSON-schema response mode.
+- Implemented schema validation + bounded repair loop (`max_schema_repairs`) that retries malformed outputs before surfacing `SchemaValidationError`.
+- Added reusable `LLMAgent` base class for schema-driven agent execution while preserving deterministic agents for tests.
+- Extended runtime config with `MAX_SCHEMA_REPAIRS` environment setting.
+- Added runtime dependencies for OpenAI SDK and JSON Schema validation.

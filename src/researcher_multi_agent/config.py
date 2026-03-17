@@ -8,6 +8,7 @@ class ModelSettings:
     specialist_model: str = "gpt-4.1-mini"
     reviewer_model: str = "gpt-4.1-mini"
     temperature: float = 0.2
+    max_schema_repairs: int = 2
 
 
 @dataclass(frozen=True)
@@ -25,5 +26,6 @@ def load_config() -> AppConfig:
             specialist_model=os.getenv("SPECIALIST_MODEL", "gpt-4.1-mini"),
             reviewer_model=os.getenv("REVIEWER_MODEL", "gpt-4.1-mini"),
             temperature=float(os.getenv("MODEL_TEMPERATURE", "0.2")),
+            max_schema_repairs=int(os.getenv("MAX_SCHEMA_REPAIRS", "2")),
         ),
     )
