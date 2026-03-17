@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from researcher_multi_agent.agents.chief_of_staff import ChiefOfStaff
+from researcher_multi_agent.agents.goal_interpreter import GoalInterpreter
 from researcher_multi_agent.agents.literature_cartographer import LiteratureCartographer
 from researcher_multi_agent.agents.project_architect import ProjectArchitect
 from researcher_multi_agent.agents.narrative_writer import NarrativeWriter
@@ -14,6 +15,7 @@ from researcher_multi_agent.agents.topic_strategist import TopicStrategist
 from researcher_multi_agent.orchestrator.routing import route_delegations
 from researcher_multi_agent.schemas.agent_outputs import (
     ChiefOfStaffOutput,
+    GoalIntentOutput,
     LiteratureCartographerOutput,
     ProjectArchitectOutput,
     NarrativeWriterOutput,
@@ -30,6 +32,7 @@ MAX_DELEGATIONS_PER_RUN = 12
 
 @dataclass
 class OrchestrationResult:
+    goal_intent: GoalIntentOutput
     chief_of_staff: ChiefOfStaffOutput
     topic_strategist: TopicStrategistOutput | None
     literature_cartographer: LiteratureCartographerOutput | None
@@ -47,6 +50,7 @@ class OrchestrationEngine:
         trace_hook: Callable[[dict], None] | None = None,
     ) -> None:
         loader = prompt_loader or PromptLoader()
+        self.goal_interpreter = GoalInterpreter()
         self.chief = ChiefOfStaff(loader)
         self.topic = TopicStrategist(loader)
         self.literature = LiteratureCartographer(loader)
@@ -132,7 +136,27 @@ class OrchestrationEngine:
         state = SharedState(goal_profile=GoalProfile(user_goal=goal, constraints=constraints or []))
         self._snapshot_state(state, stage="initialized")
 
-        chief_result = self.chief.run(task=goal, state=state)
+        goal_intent = self.goal_interpreter.run(task=goal, state=state)
+        state.timeline.append({"event": "goal_interpreted", **goal_intent.model_dump()})
+        self._emit_trace({"event": "goal_interpreted", "mode": goal_intent.mode})
+
+        state.goal_profile.constraints = [
+            *state.goal_profile.constraints,
+            f"mode={goal_intent.mode}",
+            f"must_include={'; '.join(goal_intent.deliverables.must_include)}",
+            f"nice_to_have={'; '.join(goal_intent.deliverables.nice_to_have)}",
+            f"success_criteria={'; '.join(goal_intent.success_criteria)}",
+        ]
+
+        planning_task = (
+            f"Goal: {goal}\n"
+            f"Mode: {goal_intent.mode}\n"
+            f"Deliverables contract must_include: {goal_intent.deliverables.must_include}\n"
+            f"Deliverables contract nice_to_have: {goal_intent.deliverables.nice_to_have}\n"
+            f"Success criteria: {goal_intent.success_criteria}\n"
+            f"Assumptions: {goal_intent.assumptions}"
+        )
+        chief_result = self.chief.run(task=planning_task, state=state)
         self._apply_chief_state_update(state=state, chief_result=chief_result)
         routes = route_delegations(chief_result)
         if len(routes) > MAX_DELEGATIONS_PER_RUN:
@@ -315,6 +339,7 @@ class OrchestrationEngine:
         self._snapshot_state(state, stage="final")
 
         return OrchestrationResult(
+            goal_intent=goal_intent,
             chief_of_staff=chief_result,
             topic_strategist=topic_result,
             literature_cartographer=literature_result,
