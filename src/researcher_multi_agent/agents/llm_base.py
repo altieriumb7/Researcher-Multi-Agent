@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
 from researcher_multi_agent.agents.base import BaseAgent
-from researcher_multi_agent.llm.client import LLMClient
 from researcher_multi_agent.schemas.state import SharedState
 
 T = TypeVar("T")
@@ -13,7 +12,7 @@ T = TypeVar("T")
 class LLMAgent(BaseAgent[T], ABC, Generic[T]):
     """Reusable base for OpenAI-backed agents with strict JSON schema outputs."""
 
-    def __init__(self, llm_client: LLMClient, prompt: str) -> None:
+    def __init__(self, llm_client: Any, prompt: str) -> None:
         self.llm_client = llm_client
         self.prompt = prompt
 

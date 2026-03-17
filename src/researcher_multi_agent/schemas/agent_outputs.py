@@ -170,6 +170,7 @@ class TopicStrategistOutput:
     candidate_directions: list[CandidateDirection]
     recommended_focus: list[str]
     decisive_next_questions: list[str]
+    evidence: list[dict[str, str]]
 
     @classmethod
     def model_validate(cls, payload: dict[str, Any]) -> "TopicStrategistOutput":
@@ -185,6 +186,7 @@ class TopicStrategistOutput:
             candidate_directions=directions,
             recommended_focus=payload["recommended_focus"],
             decisive_next_questions=payload["decisive_next_questions"],
+            evidence=payload.get("evidence", []),
         )
 
     def model_dump(self) -> dict[str, Any]:
@@ -192,6 +194,7 @@ class TopicStrategistOutput:
             "candidate_directions": [direction.model_dump() for direction in self.candidate_directions],
             "recommended_focus": self.recommended_focus,
             "decisive_next_questions": self.decisive_next_questions,
+            "evidence": self.evidence,
         }
 
 
@@ -273,12 +276,22 @@ class LiteratureCartographerOutput:
     benchmark_map: list[str]
     evidence_gaps: list[str]
     reading_ladder: list[ReadingLadderStep]
+    evidence: list[dict[str, str]]
 
     @classmethod
     def model_validate(cls, payload: dict[str, Any]) -> "LiteratureCartographerOutput":
         require_fields(
             payload,
-            ["topic", "clusters", "must_read", "optional_read", "benchmark_map", "evidence_gaps", "reading_ladder"],
+            [
+                "topic",
+                "clusters",
+                "must_read",
+                "optional_read",
+                "benchmark_map",
+                "evidence_gaps",
+                "reading_ladder",
+                "evidence",
+            ],
             "LiteratureCartographerOutput",
         )
         clusters = [LiteratureCluster.from_dict(item) for item in payload["clusters"]]
@@ -295,6 +308,7 @@ class LiteratureCartographerOutput:
             benchmark_map=payload["benchmark_map"],
             evidence_gaps=payload["evidence_gaps"],
             reading_ladder=reading_ladder,
+            evidence=payload["evidence"],
         )
 
     def model_dump(self) -> dict[str, Any]:
@@ -306,6 +320,7 @@ class LiteratureCartographerOutput:
             "benchmark_map": self.benchmark_map,
             "evidence_gaps": self.evidence_gaps,
             "reading_ladder": [step.model_dump() for step in self.reading_ladder],
+            "evidence": self.evidence,
         }
 
 
@@ -373,6 +388,7 @@ class ProjectArchitectOutput:
     timeline: ProjectTimeline
     major_risks: list[str]
     fallback_versions: list[str]
+    evidence: list[dict[str, str]]
 
     @classmethod
     def model_validate(cls, payload: dict[str, Any]) -> "ProjectArchitectOutput":
@@ -391,6 +407,7 @@ class ProjectArchitectOutput:
                 "timeline",
                 "major_risks",
                 "fallback_versions",
+                "evidence",
             ],
             "ProjectArchitectOutput",
         )
@@ -407,6 +424,7 @@ class ProjectArchitectOutput:
             timeline=ProjectTimeline.from_dict(payload["timeline"]),
             major_risks=payload["major_risks"],
             fallback_versions=payload["fallback_versions"],
+            evidence=payload["evidence"],
         )
 
     def model_dump(self) -> dict[str, Any]:
@@ -423,6 +441,7 @@ class ProjectArchitectOutput:
             "timeline": self.timeline.model_dump(),
             "major_risks": self.major_risks,
             "fallback_versions": self.fallback_versions,
+            "evidence": self.evidence,
         }
 
 
@@ -483,10 +502,11 @@ class SupervisorSegmentation:
 class SupervisorMapperOutput:
     targets: list[SupervisorTarget]
     segmentation: SupervisorSegmentation
+    evidence: list[dict[str, str]]
 
     @classmethod
     def model_validate(cls, payload: dict[str, Any]) -> "SupervisorMapperOutput":
-        require_fields(payload, ["targets", "segmentation"], "SupervisorMapperOutput")
+        require_fields(payload, ["targets", "segmentation", "evidence"], "SupervisorMapperOutput")
         targets = [SupervisorTarget.from_dict(item) for item in payload["targets"]]
         if not targets:
             raise SchemaValidationError("SupervisorMapperOutput requires at least one target")
@@ -506,12 +526,14 @@ class SupervisorMapperOutput:
         return cls(
             targets=targets,
             segmentation=segmentation,
+            evidence=payload["evidence"],
         )
 
     def model_dump(self) -> dict[str, Any]:
         return {
             "targets": [target.model_dump() for target in self.targets],
             "segmentation": self.segmentation.model_dump(),
+            "evidence": self.evidence,
         }
 
 
@@ -537,6 +559,7 @@ class NarrativeWriterOutput:
     drafts: list[NarrativeDraft]
     customization_slots: list[str]
     weak_sentences_to_avoid: list[str]
+    evidence: list[dict[str, str]]
 
     @classmethod
     def model_validate(cls, payload: dict[str, Any]) -> "NarrativeWriterOutput":
@@ -549,6 +572,7 @@ class NarrativeWriterOutput:
                 "drafts",
                 "customization_slots",
                 "weak_sentences_to_avoid",
+                "evidence",
             ],
             "NarrativeWriterOutput",
         )
@@ -564,6 +588,7 @@ class NarrativeWriterOutput:
             drafts=drafts,
             customization_slots=payload["customization_slots"],
             weak_sentences_to_avoid=payload["weak_sentences_to_avoid"],
+            evidence=payload["evidence"],
         )
 
     def model_dump(self) -> dict[str, Any]:
@@ -574,4 +599,5 @@ class NarrativeWriterOutput:
             "drafts": [draft.model_dump() for draft in self.drafts],
             "customization_slots": self.customization_slots,
             "weak_sentences_to_avoid": self.weak_sentences_to_avoid,
+            "evidence": self.evidence,
         }
