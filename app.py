@@ -21,6 +21,12 @@ if str(SRC_PATH) not in sys.path:
 from researcher_multi_agent.orchestrator.engine import OrchestrationEngine
 
 
+def normalize_text(value: Any) -> str:
+    """Normalize text for markdown rendering in Gradio outputs."""
+    text = str(value)
+    return text.replace("\\n", "\n").strip()
+
+
 def parse_constraints(raw_constraints: str) -> list[str]:
     """Parse constraints from newline and/or comma-separated text safely."""
     if not raw_constraints or not raw_constraints.strip():
@@ -70,7 +76,9 @@ def format_timeline(result: Any) -> str:
     lines = ["### Timeline / Major Steps"]
     for idx, event in enumerate(result.state.timeline, start=1):
         event_name = event.get("event", "unknown_event")
-        details = ", ".join(f"{key}={value}" for key, value in event.items() if key != "event")
+        details = ", ".join(
+            f"{key}={normalize_text(value)}" for key, value in event.items() if key != "event"
+        )
         if details:
             lines.append(f"{idx}. **{event_name}** — {details}")
         else:
@@ -89,15 +97,15 @@ def format_reviewer_output(result: Any) -> str:
 
     if reviewer.critical_issues:
         lines.append("- **Critical issues:**")
-        lines.extend([f"  - {issue}" for issue in reviewer.critical_issues])
+        lines.extend([f"  - {normalize_text(issue)}" for issue in reviewer.critical_issues])
 
     if reviewer.minor_issues:
         lines.append("- **Minor issues:**")
-        lines.extend([f"  - {issue}" for issue in reviewer.minor_issues])
+        lines.extend([f"  - {normalize_text(issue)}" for issue in reviewer.minor_issues])
 
     if reviewer.revision_instructions:
         lines.append("- **Revision instructions:**")
-        lines.extend([f"  - {item}" for item in reviewer.revision_instructions])
+        lines.extend([f"  - {normalize_text(item)}" for item in reviewer.revision_instructions])
 
     return "\n".join(lines)
 
