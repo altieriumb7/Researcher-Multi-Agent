@@ -171,6 +171,7 @@ def test_narrative_writer_output_schema_round_trip() -> None:
         "drafts": [{"version_name": "v1", "text": "Hello Prof A"}],
         "customization_slots": ["recent paper", "method overlap"],
         "weak_sentences_to_avoid": ["I am passionate"],
+        "evidence": [{"claim": "c", "source": "s", "confidence": "medium"}],
     }
     parsed = NarrativeWriterOutput.model_validate(payload)
 

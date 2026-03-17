@@ -91,6 +91,7 @@ def test_literature_cartographer_schema_validation_passes() -> None:
             "reading_ladder": [
                 {"day": 1, "goal": "grounding", "papers": ["Paper A"], "notes_to_extract": ["metrics"]}
             ],
+            "evidence": [{"claim": "c", "source": "s", "confidence": "medium"}],
         }
     )
     assert parsed.clusters[0].cluster_name == "Failure detection"
@@ -124,6 +125,7 @@ def test_project_architect_schema_validation_passes() -> None:
             },
             "major_risks": ["risk"],
             "fallback_versions": ["fallback"],
+            "evidence": [{"claim": "c", "source": "s", "confidence": "medium"}],
         }
     )
     assert parsed.evaluation.primary_metrics == ["AUROC"]
@@ -194,6 +196,7 @@ def test_supervisor_mapper_schema_validation_passes() -> None:
                 }
             ],
             "segmentation": {"reach": [], "strong_fit": ["Prof A"], "safe_fit": []},
+            "evidence": [{"claim": "c", "source": "s", "confidence": "medium"}],
         }
     )
     assert parsed.targets[0].fit_level == "primary"
